@@ -8,7 +8,7 @@ def show_configuracoes(user, obra_config):
     st.header("⚙️ Configurações do Sistema")
     
     # Tabs para organizar
-    tab1, tab2, tab3 = st.tabs(["🏗️ Obra", "🏷️ Categorias", "👥 Sistema"])
+    tab1, tab2, tab3 = st.tabs(["��️ Obra", "��️ Categorias", "�� Sistema"])
     
     with tab1:
         _show_obra_config(obra_config)
@@ -34,7 +34,7 @@ def _show_obra_config(obra_config):
             )
             
             orcamento_total = st.number_input(
-                "💰 Orçamento Total (R$)",
+                "💰 Orçamento Total (R\$)",
                 min_value=0.0,
                 value=float(obra_config['orcamento_total']),
                 step=1000.0,
@@ -44,7 +44,7 @@ def _show_obra_config(obra_config):
         
         with col2:
             data_inicio = st.date_input(
-                "�� Data de Início",
+                "📅 Data de Início",
                 value=obra_config['data_inicio'] if obra_config['data_inicio'] else date.today(),
                 help="Data de início da obra"
             )
@@ -125,7 +125,7 @@ def _show_categorias_config():
         
         for categoria in categorias:
             # A chave do formulário agora está segura, pois categoria['id'] não será None
-            with st.expander(f"��️ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
+            with st.expander(f"🏷️ {categoria['nome']} - R\$ {categoria['orcamento_previsto']:,.2f}"):
                 with st.form(key=f"edit_categoria_{categoria['id']}"): 
                     col1, col2 = st.columns(2)
                     
@@ -144,7 +144,7 @@ def _show_categorias_config():
                     
                     with col2:
                         novo_orcamento = st.number_input(
-                            "Orçamento Previsto (R$)",
+                            "Orçamento Previsto (R\$)",
                             min_value=0.0,
                             value=float(categoria['orcamento_previsto']),
                             step=100.0,
@@ -198,7 +198,7 @@ def _show_categorias_config():
         
         with col2:
             orcamento_nova = st.number_input(
-                "Orçamento Previsto (R$)",
+                "Orçamento Previsto (R\$)",
                 min_value=0.0,
                 step=100.0,
                 format="%.2f"
@@ -239,12 +239,20 @@ def _create_categoria(nome, descricao, orcamento):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("""
-            INSERT INTO categorias (nome, descricao, orcamento_previsto, ativo)
-            VALUES (?, ?, ?, 1)
-        """, (nome, descricao, orcamento))
-        
-        new_id = cursor.lastrowid # Tenta obter o ID da última linha inserida
+        if hasattr(conn, 'db_type') and conn.db_type == 'postgresql':
+            # Para PostgreSQL, use RETURNING id
+            cursor.execute("""
+                INSERT INTO categorias (nome, descricao, orcamento_previsto, ativo)
+                VALUES (%s, %s, %s, 1) RETURNING id
+            """, (nome, descricao, orcamento))
+            new_id = cursor.fetchone()[0] # Pega o ID retornado
+        else:
+            # Para SQLite, use cursor.lastrowid
+            cursor.execute("""
+                INSERT INTO categorias (nome, descricao, orcamento_previsto, ativo)
+                VALUES (?, ?, ?, 1)
+            """, (nome, descricao, orcamento))
+            new_id = cursor.lastrowid
         
         conn.commit()
         conn.close()
@@ -253,7 +261,7 @@ def _create_categoria(nome, descricao, orcamento):
             st.success(f"✅ Nova categoria '{nome}' criada com sucesso com ID: {new_id}!")
             return True
         else:
-            st.error("❌ Erro ao criar categoria: O ID da nova categoria não foi retornado. Verifique a configuração do banco de dados (ex: autoincrement ou RETURNING id para PostgreSQL).")
+            st.error("❌ Erro ao criar categoria: O ID da nova categoria não foi retornado. Verifique a configuração do banco de dados.")
             return False
         
     except Exception as e:
@@ -264,10 +272,10 @@ def _create_categoria(nome, descricao, orcamento):
 
 def _show_sistema_config(user):
     """Configurações do sistema"""
-    st.subheader("👥 Configurações do Sistema")
+    st.subheader("�� Configurações do Sistema")
     
     # Informações do usuário atual
-    st.markdown("### �� Usuário Atual")
+    st.markdown("### 👤 Usuário Atual")
     
     col1, col2 = st.columns(2)
     
@@ -313,7 +321,7 @@ def _show_sistema_config(user):
             st.metric("💰 Lançamentos", total_lancamentos)
         
         with col4:
-            st.metric("📎 Arquivos", total_arquivos)
+            st.metric("�� Arquivos", total_arquivos)
         
     except Exception as e:
         st.error(f"❌ Erro ao buscar estatísticas: {e}")
@@ -337,11 +345,16 @@ def _verificar_integridade_banco():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Verificar tabelas
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tabelas = cursor.fetchall()
-        
-        st.success(f"✅ Banco íntegro! {len(tabelas)} tabelas encontradas.")
+        # Verificar tabelas (para SQLite, este é um bom teste, para PostgreSQL pode ser diferente)
+        # Assumindo que este check é mais para SQLite se ele for usado localmente
+        if hasattr(conn, 'db_type') and conn.db_type == 'sqlite':
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tabelas = cursor.fetchall()
+            st.success(f"✅ Banco SQLite íntegro! {len(tabelas)} tabelas encontradas.")
+        else: # PostgreSQL
+            cursor.execute("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';")
+            tabelas = cursor.fetchall()
+            st.success(f"✅ Banco PostgreSQL íntegro! {len(tabelas)} tabelas encontradas.")
         
         # Verificar dados órfãos
         cursor.execute("""

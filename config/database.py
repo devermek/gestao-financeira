@@ -20,9 +20,10 @@ def get_db_connection():
                 conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
             
             print("✅ Conectado ao PostgreSQL!")
+            conn.db_type = 'postgresql' # Marca o tipo de conexão
             return conn
         except Exception as e:
-            print(f"❌ Erro PostgreSQL: {e}")
+            print(f"❌ Erro PostgreSQL ao conectar: {e}")
             print("🔄 Fallback para SQLite...")
             # Fallback para SQLite se PostgreSQL falhar
             return get_sqlite_connection()
@@ -36,6 +37,7 @@ def get_sqlite_connection():
     db_path = "obra_database.db"
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
+    conn.db_type = 'sqlite' # Marca o tipo de conexão
     return conn
 
 def init_db():
@@ -140,9 +142,71 @@ def init_sqlite():
     conn = get_sqlite_connection()
     cursor = conn.cursor()
     
-    # [Código SQLite original aqui - mesmo do código anterior]
-    # ... (mantenha todo o código SQLite que você já tinha)
+    # Código SQLite original (assumindo que estas são as definições padrão)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL,
+            tipo TEXT NOT NULL CHECK (tipo IN ('gestor', 'investidor')),
+            ativo INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS categorias (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            orcamento_previsto REAL DEFAULT 0,
+            ativo INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS lancamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data DATE NOT NULL,
+            categoria_id INTEGER NOT NULL,
+            descricao TEXT NOT NULL,
+            valor REAL NOT NULL,
+            observacoes TEXT,
+            usuario_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (categoria_id) REFERENCES categorias (id),
+            FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS arquivos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            tamanho INTEGER,
+            conteudo BLOB,
+            lancamento_id INTEGER NOT NULL,
+            usuario_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lancamento_id) REFERENCES lancamentos (id),
+            FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
+        )
+    """)
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS obra_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome_obra TEXT,
+            orcamento_total REAL,
+            data_inicio DATE,
+            data_previsao_fim DATE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
     print("✅ SQLite inicializado com sucesso!")
