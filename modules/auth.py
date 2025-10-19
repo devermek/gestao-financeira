@@ -1,8 +1,7 @@
 import streamlit as st
 import hashlib
 import os
-from config.database import get_db_connection, get_current_db_type # Importa as funções de conexão e tipo de DB
-from utils.helpers import get_obra_config # Para buscar a config da obra no login, se necessário
+from config.database import get_db_connection, get_current_db_type
 
 # --- Funções de Autenticação ---
 
@@ -40,15 +39,16 @@ def login_user(email, password):
                 return user_data
             else: # sqlite3.Row ou tupla
                 return {
-                    'id': user_data[0],
-                    'nome': user_data[1],
-                    'email': user_data[2],
-                    'tipo': user_data[3],
-                    'ativo': user_data[4]
+                    'id': user_data['id'] if isinstance(user_data, st.connections.SQLConnection) else user_data[0],
+                    'nome': user_data['nome'] if isinstance(user_data, st.connections.SQLConnection) else user_data[1],
+                    'email': user_data['email'] if isinstance(user_data, st.connections.SQLConnection) else user_data[2],
+                    'tipo': user_data['tipo'] if isinstance(user_data, st.connections.SQLConnection) else user_data[3],
+                    'ativo': user_data['ativo'] if isinstance(user_data, st.connections.SQLConnection) else user_data[4]
                 }
         return None
     except Exception as e:
-        st.error(f"Erro ao tentar login: {e}")
+        # st.error(f"Erro ao tentar login: {e}") # Comentar para evitar spam na tela
+        print(f"Erro ao tentar login: {e}") # Imprimir no console para debug
         return None
     finally:
         if conn:
@@ -58,9 +58,12 @@ def show_login_page():
     """Exibe a página de login."""
     st.title("🔐 Login")
 
+    # Garante que um admin inicial exista
+    ensure_first_admin_exists()
+
     # Campos de input
-    email = st.text_input("Email")
-    password = st.text_input("Senha", type="password")
+    email = st.text_input("Email", key="login_email_input")
+    password = st.text_input("Senha", type="password", key="login_password_input")
 
     # Botão de login
     if st.button("Entrar", type="primary"):
@@ -76,8 +79,6 @@ def show_login_page():
         else:
             st.warning("Por favor, preencha todos os campos.")
 
-# --- Cabeçalho do Usuário Logado ---
-
 def show_user_header(user, obra_config):
     """Exibe o cabeçalho superior da aplicação com informações do usuário e da obra."""
     st.markdown(f"""
@@ -90,21 +91,60 @@ def show_user_header(user, obra_config):
             </div>
         </div>
     """, unsafe_allow_html=True)
-    # Você pode adicionar mais elementos de cabeçalho aqui se necessário
     
-    # Exemplo de botão de logout
+    # Botão de logout na sidebar
     if st.sidebar.button("Sair", help="Fazer Logout"):
         st.session_state.user = None
         st.session_state.logged_in = False
-        st.session_state.current_page = 'login' # Ou outra página inicial
-        st.rerun()
+        # Redireciona para a página de login para que o show_login_page seja chamado
+        st.rerun() # Reinicia a aplicação, que vai parar na tela de login
 
-# --- Placeholder para outras funções de usuário, se houver ---
-# def show_profile_page(user):
-#     st.subheader(f"Perfil de {user['nome']}")
-#     st.write(f"Email: {user['email']}")
-#     st.write(f"Tipo: {user['tipo']}")
+def ensure_first_admin_exists():
+    """
+    Verifica se existe algum usuário na tabela 'usuarios'.
+    Se não houver, cria um usuário 'gestor' padrão.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        db_type = get_current_db_type()
 
-# def register_user_page():
-#     st.subheader("Registrar Novo Usuário")
-#     # ... formulário de registro ...
+        # Verifica se já existe algum usuário
+        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        count = cursor.fetchone()[0]
+
+        if count == 0:
+            st.warning("Nenhum usuário encontrado. Criando usuário administrador padrão.")
+            default_email = "admin@obra.com"
+            default_password = "admin" # Senha fácil para o primeiro login
+            hashed_default_password = hash_password(default_password)
+
+            # Usar %s para PostgreSQL e ? para SQLite para placeholders
+            param_placeholder_str = '%s' if db_type == 'postgresql' else '?'
+
+            # Inserir o usuário gestor padrão
+            insert_query = f"""
+                INSERT INTO usuarios (nome, email, senha, tipo, ativo)
+                VALUES ({param_placeholder_str}, {param_placeholder_str}, {param_placeholder_str}, {param_placeholder_str}, 1)
+            """
+            cursor.execute(insert_query, ("Administrador", default_email, hashed_default_password, "gestor"))
+            conn.commit()
+            st.success(f"Usuário administrador criado: Email '{default_email}', Senha '{default_password}'. Por favor, faça login.")
+            st.info("⚠️ Recomendamos alterar a senha após o primeiro login.")
+        else:
+            # st.info(f"Usuários encontrados: {count}. O sistema está pronto para login.") # Apenas para debug
+            pass # Não mostra nada se já tem usuários
+            
+    except Exception as e:
+        st.error(f"Erro ao verificar/criar usuário administrador inicial: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+if __name__ == "__main__":
+    # Este bloco é executado apenas se 'auth.py' for o script principal,
+    # o que não é o caso quando é importado por 'app.py'.
+    # É útil para testar funções isoladamente, mas não afetará o fluxo do app.
+    st.set_page_config(layout="centered")
+    show_login_page()
