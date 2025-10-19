@@ -21,7 +21,7 @@ def show_configuracoes(user, obra_config):
 
 def _show_obra_config(obra_config):
     """Configurações da obra"""
-    st.subheader("🏗️ Configurações da Obra")
+    st.subheader("��️ Configurações da Obra")
     
     with st.form("config_obra"):
         col1, col2 = st.columns(2)
@@ -115,14 +115,17 @@ def _show_categorias_config():
     st.subheader("🏷️ Gestão de Categorias")
     
     # Mostrar categorias existentes
-    categorias = get_categorias_ativas()
+    categorias_raw = get_categorias_ativas()
+    
+    # FILTRO ESSENCIAL: Garantir que apenas categorias com ID válido sejam processadas
+    categorias = [cat for cat in categorias_raw if cat and cat.get('id') is not None]
     
     if categorias:
         st.markdown("### 📋 Categorias Cadastradas")
         
         for categoria in categorias:
-            with st.expander(f"🏷️ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
-                # Chave única para o formulário
+            # A chave do formulário agora está segura, pois categoria['id'] não será None
+            with st.expander(f"��️ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
                 with st.form(key=f"edit_categoria_{categoria['id']}"): 
                     col1, col2 = st.columns(2)
                     
@@ -256,7 +259,7 @@ def _show_sistema_config(user):
     st.subheader("👥 Configurações do Sistema")
     
     # Informações do usuário atual
-    st.markdown("### 👤 Usuário Atual")
+    st.markdown("### �� Usuário Atual")
     
     col1, col2 = st.columns(2)
     
@@ -293,7 +296,7 @@ def _show_sistema_config(user):
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("👥 Usuários Ativos", total_usuarios)
+            st.metric("�� Usuários Ativos", total_usuarios)
         
         with col2:
             st.metric("🏷️ Categorias Ativas", total_categorias)
@@ -302,13 +305,13 @@ def _show_sistema_config(user):
             st.metric("💰 Lançamentos", total_lancamentos)
         
         with col4:
-            st.metric("�� Arquivos", total_arquivos)
+            st.metric("📎 Arquivos", total_arquivos)
         
     except Exception as e:
         st.error(f"❌ Erro ao buscar estatísticas: {e}")
     
     # Backup e manutenção
-    st.markdown("### �� Manutenção")
+    st.markdown("### 🔧 Manutenção")
     
     col1, col2 = st.columns(2)
     
@@ -317,7 +320,7 @@ def _show_sistema_config(user):
             _verificar_integridade_banco()
     
     with col2:
-        if st.button("�� Recarregar Sistema", type="secondary"):
+        if st.button("🔄 Recarregar Sistema", type="secondary"):
             st.rerun()
 
 def _verificar_integridade_banco():
