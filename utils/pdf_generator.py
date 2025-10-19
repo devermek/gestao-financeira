@@ -1,9 +1,9 @@
 import io
 import pandas as pd
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Backend para não mostrar janelas
-import seaborn as sns
+#import seaborn as sns
 from datetime import datetime, date
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
