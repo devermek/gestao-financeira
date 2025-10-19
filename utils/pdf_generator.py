@@ -115,10 +115,10 @@ def _add_resumo_executivo(story, styles, obra_config, incluir_graficos):
     # Tabela de métricas
     dados_metricas = [
         ['Métrica', 'Valor'],
-        ['Total Gasto', f'R\$ {total_gasto:,.2f}'],
-        ['Orçamento Total', f'R\$ {orcamento_referencia:,.2f}'],
+        ['Total Gasto', f'R$ {total_gasto:,.2f}'],
+        ['Orçamento Total', f'R$ {orcamento_referencia:,.2f}'],
         ['% Executado', f'{percentual:.1f}%'],
-        ['Saldo Restante', f'R\$ {restante:,.2f}'],
+        ['Saldo Restante', f'R$ {restante:,.2f}'],
     ]
 
     tabela_metricas = Table(dados_metricas, colWidths=[3*inch, 2*inch])
@@ -154,8 +154,8 @@ def _add_resumo_executivo(story, styles, obra_config, incluir_graficos):
             perc_cat = (cat['gasto'] / cat['orcamento_previsto'] * 100) if cat['orcamento_previsto'] > 0 else 0
             dados_categoria.append([
                 cat['nome'],
-                f"R\$ {cat['orcamento_previsto']:,.2f}",
-                f"R\$ {cat['gasto']:,.2f}",
+                f"R$ {cat['orcamento_previsto']:,.2f}",
+                f"R$ {cat['gasto']:,.2f}",
                 f"{perc_cat:.1f}%"
             ])
 
@@ -187,7 +187,7 @@ def _add_resumo_executivo(story, styles, obra_config, incluir_graficos):
                 format_date_br(lanc['data']),
                 lanc['categoria'],
                 descricao,
-                f"R\$ {lanc['valor']:,.2f}"
+                f"R$ {lanc['valor']:,.2f}"
             ])
 
         tabela_ultimos = Table(dados_ultimos, colWidths=[1*inch, 1.5*inch, 2.5*inch, 1*inch])
@@ -245,7 +245,7 @@ def _add_relatorio_detalhado(story, styles, data_inicio, data_fim, incluir_grafi
 
     # Resumo do período
     total_periodo = df_lancamentos['valor'].sum()
-    story.append(Paragraph(f"Total do período: R\$ {total_periodo:,.2f}", styles['Heading3']))
+    story.append(Paragraph(f"Total do período: R$ {total_periodo:,.2f}", styles['Heading3']))
     story.append(Paragraph(f"Quantidade de lançamentos: {len(df_lancamentos)}", styles['Normal']))
     story.append(Spacer(1, 12))
 
@@ -265,7 +265,7 @@ def _add_relatorio_detalhado(story, styles, data_inicio, data_fim, incluir_grafi
             format_date_br(lanc['data']),
             lanc['categoria'],
             descricao,
-            f"R\$ {lanc['valor']:,.2f}",
+            f"R$ {lanc['valor']:,.2f}",
             lanc['usuario']
         ])
 
@@ -326,10 +326,10 @@ def _add_analise_categoria(story, styles, incluir_graficos):
 
         dados_analise.append([
             cat['categoria'],
-            f"R\$ {cat['orcamento_previsto']:,.0f}",
-            f"R\$ {cat['gasto_total']:,.0f}",
+            f"R$ {cat['orcamento_previsto']:,.0f}",
+            f"R$ {cat['gasto_total']:,.0f}",
             str(int(cat['quantidade_lancamentos'])),
-            f"R\$ {cat['valor_medio']:,.0f}",
+            f"R$ {cat['valor_medio']:,.0f}",
             f"{perc_utilizado:.1f}%"
         ])
 
@@ -358,8 +358,8 @@ def _add_analise_categoria(story, styles, incluir_graficos):
     story.append(Spacer(1, 8))
 
     resumo_texto = f"""
-    • Orçamento total das categorias: R\$ {total_orcamento:,.2f}<br/>
-    • Total gasto até o momento: R\$ {total_gasto:,.2f}<br/>
+    • Orçamento total das categorias: R$ {total_orcamento:,.2f}<br/>
+    • Total gasto até o momento: R$ {total_gasto:,.2f}<br/>
     • Percentual geral utilizado: {(total_gasto/total_orcamento*100):.1f}%<br/>
     • Categoria com maior gasto: {categoria_mais_gasta}<br/>
     • Número total de categorias: {len(df_analise)}
@@ -383,7 +383,7 @@ def gerar_relatorio_simples(obra_config, user):
         # Dados básicos
         total_gasto, _, gastos_categoria, _, ultimos = get_dados_dashboard()
 
-        story.append(Paragraph(f"Total Gasto: R\$ {total_gasto:,.2f}", styles['Heading2']))
+        story.append(Paragraph(f"Total Gasto: R$ {total_gasto:,.2f}", styles['Heading2']))
         story.append(Paragraph(f"Gerado em: {datetime.now().strftime('%d/%m/%Y às %H:%M')}", styles['Normal']))
         story.append(Paragraph(f"Por: {user['nome']}", styles['Normal']))
 

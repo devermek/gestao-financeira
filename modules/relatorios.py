@@ -45,13 +45,13 @@ def _show_resumo_executivo(obra_config):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric("💰 Total Investido", f"R\$ {total_gasto:,.2f}")
-        st.metric("📊 Orçamento Total", f"R\$ {orcamento_referencia:,.2f}")
+        st.metric("💰 Total Investido", f"R$ {total_gasto:,.2f}")
+        st.metric("📊 Orçamento Total", f"R$ {orcamento_referencia:,.2f}")
     
     with col2:
         st.metric("📈 % Executado", f"{percentual:.1f}%")
         restante = orcamento_referencia - total_gasto
-        st.metric("💵 Saldo Restante", f"R\$ {restante:,.2f}")
+        st.metric("💵 Saldo Restante", f"R$ {restante:,.2f}")
     
     with col3:
         # Buscar estatísticas adicionais
@@ -117,7 +117,7 @@ def _show_resumo_executivo(obra_config):
                 st.write(f"🏷️ {gasto['categoria']}")
             
             with col3:
-                st.write(f"**💰 R\$ {gasto['valor']:,.2f}**")
+                st.write(f"**💰 R$ {gasto['valor']:,.2f}**")
                 st.caption(f"📅 {format_date_br(gasto['data'])}")
 
 def _show_relatorio_detalhado():
@@ -182,9 +182,9 @@ def _show_relatorio_detalhado():
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("💰 Total do Período", f"R\$ {total_periodo:,.2f}")
+        st.metric("💰 Total do Período", f"R$ {total_periodo:,.2f}")
     with col2:
-        st.metric("📊 Média Diária", f"R\$ {media_diaria:,.2f}")
+        st.metric("📊 Média Diária", f"R$ {media_diaria:,.2f}")
     with col3:
         st.metric("📝 Lançamentos", len(df_lancamentos))
     
@@ -194,7 +194,7 @@ def _show_relatorio_detalhado():
     # Preparar dados para exibição
     df_display = df_lancamentos.copy()
     df_display['data'] = df_display['data'].apply(format_date_br)
-    df_display['valor'] = df_display['valor'].apply(lambda x: f"R\$ {x:,.2f}")
+    df_display['valor'] = df_display['valor'].apply(lambda x: f"R$ {x:,.2f}")
     
     # Limitar descrição
     df_display['descricao'] = df_display['descricao'].apply(
@@ -285,8 +285,8 @@ def _show_analises_avancadas():
         df_mensal_display['mes'] = df_mensal_display['mes'].apply(
             lambda x: datetime.strptime(x, '%Y-%m').strftime('%B/%Y')
         )
-        df_mensal_display['total'] = df_mensal_display['total'].apply(lambda x: f"R\$ {x:,.2f}")
-        df_mensal_display['media'] = df_mensal_display['media'].apply(lambda x: f"R\$ {x:,.2f}")
+        df_mensal_display['total'] = df_mensal_display['total'].apply(lambda x: f"R$ {x:,.2f}")
+        df_mensal_display['media'] = df_mensal_display['media'].apply(lambda x: f"R$ {x:,.2f}")
         
         df_mensal_display.columns = ['Mês', 'Qtd Lançamentos', 'Total Gasto', 'Média por Lançamento']
         
