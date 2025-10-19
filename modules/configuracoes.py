@@ -8,7 +8,7 @@ def show_configuracoes(user, obra_config):
     st.header("⚙️ Configurações do Sistema")
     
     # Tabs para organizar
-    tab1, tab2, tab3 = st.tabs(["��️ Obra", "��️ Categorias", "�� Sistema"])
+    tab1, tab2, tab3 = st.tabs(["🏗️ Obra", "🏷️ Categorias", "👥 Sistema"])
     
     with tab1:
         _show_obra_config(obra_config)
@@ -34,7 +34,7 @@ def _show_obra_config(obra_config):
             )
             
             orcamento_total = st.number_input(
-                "💰 Orçamento Total (R\$)",
+                "�� Orçamento Total (R$)",
                 min_value=0.0,
                 value=float(obra_config['orcamento_total']),
                 step=1000.0,
@@ -44,7 +44,7 @@ def _show_obra_config(obra_config):
         
         with col2:
             data_inicio = st.date_input(
-                "📅 Data de Início",
+                "�� Data de Início",
                 value=obra_config['data_inicio'] if obra_config['data_inicio'] else date.today(),
                 help="Data de início da obra"
             )
@@ -64,7 +64,7 @@ def _show_obra_config(obra_config):
                 
                 # Criar nova configuração
                 try:
-                    conn = get_db_connection()
+                    conn, _ = get_db_connection() # Obter conexão
                     cursor = conn.cursor()
                     
                     cursor.execute("""
@@ -93,7 +93,7 @@ def _show_obra_config(obra_config):
 def _update_obra_config(nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_id):
     """Atualiza configurações da obra"""
     try:
-        conn = get_db_connection()
+        conn, _ = get_db_connection() # Obter conexão
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -125,7 +125,7 @@ def _show_categorias_config():
         
         for categoria in categorias:
             # A chave do formulário agora está segura, pois categoria['id'] não será None
-            with st.expander(f"🏷️ {categoria['nome']} - R\$ {categoria['orcamento_previsto']:,.2f}"):
+            with st.expander(f"🏷️ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
                 with st.form(key=f"edit_categoria_{categoria['id']}"): 
                     col1, col2 = st.columns(2)
                     
@@ -144,7 +144,7 @@ def _show_categorias_config():
                     
                     with col2:
                         novo_orcamento = st.number_input(
-                            "Orçamento Previsto (R\$)",
+                            "Orçamento Previsto (R$)",
                             min_value=0.0,
                             value=float(categoria['orcamento_previsto']),
                             step=100.0,
@@ -198,7 +198,7 @@ def _show_categorias_config():
         
         with col2:
             orcamento_nova = st.number_input(
-                "Orçamento Previsto (R\$)",
+                "Orçamento Previsto (R$)",
                 min_value=0.0,
                 step=100.0,
                 format="%.2f"
@@ -216,7 +216,7 @@ def _show_categorias_config():
 def _update_categoria(categoria_id, nome, descricao, orcamento, ativo):
     """Atualiza uma categoria"""
     try:
-        conn = get_db_connection()
+        conn, _ = get_db_connection() # Obter conexão
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -236,17 +236,17 @@ def _update_categoria(categoria_id, nome, descricao, orcamento, ativo):
 def _create_categoria(nome, descricao, orcamento):
     """Cria uma nova categoria"""
     try:
-        conn = get_db_connection()
+        conn, db_type = get_db_connection() # Obter conexão e tipo
         cursor = conn.cursor()
         
-        if hasattr(conn, 'db_type') and conn.db_type == 'postgresql':
+        if db_type == 'postgresql':
             # Para PostgreSQL, use RETURNING id
             cursor.execute("""
                 INSERT INTO categorias (nome, descricao, orcamento_previsto, ativo)
                 VALUES (%s, %s, %s, 1) RETURNING id
             """, (nome, descricao, orcamento))
             new_id = cursor.fetchone()[0] # Pega o ID retornado
-        else:
+        else: # SQLite
             # Para SQLite, use cursor.lastrowid
             cursor.execute("""
                 INSERT INTO categorias (nome, descricao, orcamento_previsto, ativo)
@@ -272,7 +272,7 @@ def _create_categoria(nome, descricao, orcamento):
 
 def _show_sistema_config(user):
     """Configurações do sistema"""
-    st.subheader("�� Configurações do Sistema")
+    st.subheader("👥 Configurações do Sistema")
     
     # Informações do usuário atual
     st.markdown("### 👤 Usuário Atual")
@@ -288,10 +288,10 @@ def _show_sistema_config(user):
         st.info(f"**Status:** {'Ativo' if user.get('ativo', 1) else 'Inativo'}")
     
     # Estatísticas do sistema
-    st.markdown("### 📊 Estatísticas do Sistema")
+    st.markdown("### �� Estatísticas do Sistema")
     
     try:
-        conn = get_db_connection()
+        conn, _ = get_db_connection() # Obter conexão
         cursor = conn.cursor()
         
         # Contar registros
@@ -321,13 +321,13 @@ def _show_sistema_config(user):
             st.metric("💰 Lançamentos", total_lancamentos)
         
         with col4:
-            st.metric("�� Arquivos", total_arquivos)
+            st.metric("📎 Arquivos", total_arquivos)
         
     except Exception as e:
         st.error(f"❌ Erro ao buscar estatísticas: {e}")
     
     # Backup e manutenção
-    st.markdown("### 🔧 Manutenção")
+    st.markdown("### �� Manutenção")
     
     col1, col2 = st.columns(2)
     
@@ -336,18 +336,16 @@ def _show_sistema_config(user):
             _verificar_integridade_banco()
     
     with col2:
-        if st.button("🔄 Recarregar Sistema", type="secondary"):
+        if st.button("�� Recarregar Sistema", type="secondary"):
             st.rerun()
 
 def _verificar_integridade_banco():
     """Verifica integridade do banco de dados"""
     try:
-        conn = get_db_connection()
+        conn, db_type = get_db_connection() # Obter conexão e tipo
         cursor = conn.cursor()
         
-        # Verificar tabelas (para SQLite, este é um bom teste, para PostgreSQL pode ser diferente)
-        # Assumindo que este check é mais para SQLite se ele for usado localmente
-        if hasattr(conn, 'db_type') and conn.db_type == 'sqlite':
+        if db_type == 'sqlite':
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tabelas = cursor.fetchall()
             st.success(f"✅ Banco SQLite íntegro! {len(tabelas)} tabelas encontradas.")

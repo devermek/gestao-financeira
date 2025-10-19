@@ -20,16 +20,15 @@ def get_db_connection():
                 conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
             
             print("✅ Conectado ao PostgreSQL!")
-            conn.db_type = 'postgresql' # Marca o tipo de conexão
-            return conn
+            return conn, 'postgresql' # Retorna a conexão e o tipo
         except Exception as e:
             print(f"❌ Erro PostgreSQL ao conectar: {e}")
             print("🔄 Fallback para SQLite...")
             # Fallback para SQLite se PostgreSQL falhar
-            return get_sqlite_connection()
+            return get_sqlite_connection() # Retorna a tupla (conn, 'sqlite')
     else:
         # Ambiente local (SQLite)
-        return get_sqlite_connection()
+        return get_sqlite_connection() # Retorna a tupla (conn, 'sqlite')
 
 def get_sqlite_connection():
     """Conexão SQLite"""
@@ -37,8 +36,7 @@ def get_sqlite_connection():
     db_path = "obra_database.db"
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    conn.db_type = 'sqlite' # Marca o tipo de conexão
-    return conn
+    return conn, 'sqlite' # Retorna a conexão e o tipo
 
 def init_db():
     """Inicializa o banco de dados com todas as tabelas"""
@@ -59,7 +57,7 @@ def init_db():
 def init_postgresql():
     """Inicializa banco PostgreSQL"""
     print("🐘 Inicializando PostgreSQL...")
-    conn = get_db_connection()
+    conn, _ = get_db_connection() # Desempacota a tupla, ignorando o db_type para este uso
     cursor = conn.cursor()
     
     # Tabela de usuários
@@ -138,8 +136,8 @@ def init_postgresql():
 
 def init_sqlite():
     """Inicializa banco SQLite (código original)"""
-    print("📁 Inicializando SQLite...")
-    conn = get_sqlite_connection()
+    print("�� Inicializando SQLite...")
+    conn, _ = get_sqlite_connection() # Desempacota a tupla, ignorando o db_type para este uso
     cursor = conn.cursor()
     
     # Código SQLite original (assumindo que estas são as definições padrão)
