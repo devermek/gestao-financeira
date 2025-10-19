@@ -130,7 +130,7 @@ def _show_quick_login():
         st.rerun()
         
 def create_first_user():
-    """Cria o primeiro usuário do sistema"""
+    """Cria o primeiro usuário do sistema e dados iniciais"""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -140,7 +140,6 @@ def create_first_user():
             cursor.execute("SELECT COUNT(*) FROM usuarios")
             count = cursor.fetchone()[0]
         except:
-            # Se der erro, provavelmente a tabela não existe
             count = 0
         
         if count == 0:
@@ -151,15 +150,55 @@ def create_first_user():
                 VALUES (?, ?, ?, ?)
             """, ("Deverson", "deverson@obra.com", senha_hash, "gestor"))
             
-            conn.commit()
             print("✅ Usuário padrão criado: deverson@obra.com / 123456")
         
+        # Verificar e criar categorias padrão
+        try:
+            cursor.execute("SELECT COUNT(*) FROM categorias")
+            cat_count = cursor.fetchone()[0]
+        except:
+            cat_count = 0
+            
+        if cat_count == 0:
+            # Criar categorias padrão
+            categorias_padrao = [
+                ("Material de Construção", "Cimento, areia, brita, tijolos", 50000.00),
+                ("Mão de Obra", "Pedreiros, serventes, eletricistas", 30000.00),
+                ("Ferramentas", "Equipamentos e ferramentas", 5000.00),
+                ("Transporte", "Frete e transporte de materiais", 3000.00),
+                ("Diversos", "Gastos diversos da obra", 2000.00)
+            ]
+            
+            for nome, desc, orcamento in categorias_padrao:
+                cursor.execute("""
+                    INSERT INTO categorias (nome, descricao, orcamento_previsto) 
+                    VALUES (?, ?, ?)
+                """, (nome, desc, orcamento))
+            
+            print("✅ Categorias padrão criadas!")
+        
+        # Verificar e criar configuração da obra
+        try:
+            cursor.execute("SELECT COUNT(*) FROM obra_config")
+            obra_count = cursor.fetchone()[0]
+        except:
+            obra_count = 0
+            
+        if obra_count == 0:
+            cursor.execute("""
+                INSERT INTO obra_config (nome_obra, orcamento_total, data_inicio) 
+                VALUES (?, ?, DATE('now'))
+            """, ("Minha Obra", 90000.00))
+            
+            print("✅ Configuração da obra criada!")
+        
+        conn.commit()
         cursor.close()
         conn.close()
         
     except Exception as e:
-        print(f"Erro ao criar usuário padrão: {e}")
-
+        print(f"Erro ao criar dados iniciais: {e}")
+        
 def logout():
     """Faz logout do usuário"""
     for key in ['user', 'authenticated']:

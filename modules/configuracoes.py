@@ -122,7 +122,7 @@ def _show_categorias_config():
         
         for categoria in categorias:
             with st.expander(f"🏷️ {categoria['nome']} - R\$ {categoria['orcamento_previsto']:,.2f}"):
-                with st.form(f"edit_categoria_{categoria['id']}"):
+                with st.form(f"edit_categoria_{categoria['id']}_{hash(str(categoria))}"):
                     col1, col2 = st.columns(2)
                     
                     with col1:
