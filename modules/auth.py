@@ -38,6 +38,23 @@ def authenticate_user(email, senha):
         print(f"Erro na autenticação: {e}")
         return None
 
+def show_user_header():
+    """Exibe cabeçalho com informações do usuário logado"""
+    if 'user' in st.session_state and st.session_state.user:
+        user = st.session_state.user
+        
+        col1, col2, col3 = st.columns([3, 1, 1])
+        
+        with col1:
+            st.write(f"👋 Olá, **{user['nome']}** ({user['tipo'].title()})")
+        
+        with col2:
+            st.write(f"📧 {user['email']}")
+        
+        with col3:
+            if st.button("🚪 Sair"):
+                logout()
+
 def show_login_page():
     """Exibe página de login"""
     st.title("🏗️ Sistema de Gestão de Obras")
@@ -56,6 +73,7 @@ def show_login_page():
                 with st.spinner("Inicializando banco de dados..."):
                     try:
                         init_db()
+                        create_first_user()
                         st.success("✅ Banco de dados inicializado com sucesso!")
                         st.info("🔄 Recarregue a página para continuar")
                         st.rerun()
@@ -78,6 +96,10 @@ def _show_quick_login():
     
     if users.empty:
         st.warning("Nenhum usuário encontrado. Cadastre o primeiro usuário.")
+        if st.button("👤 Criar Primeiro Usuário"):
+            create_first_user()
+            st.success("✅ Usuário criado! Recarregue a página.")
+            st.rerun()
         return
     
     # Criar opções para selectbox
@@ -105,8 +127,12 @@ def create_first_user():
         cursor = conn.cursor()
         
         # Verificar se já existe usuário
-        cursor.execute("SELECT COUNT(*) FROM usuarios")
-        count = cursor.fetchone()[0]
+        try:
+            cursor.execute("SELECT COUNT(*) FROM usuarios")
+            count = cursor.fetchone()[0]
+        except:
+            # Se der erro, provavelmente a tabela não existe
+            count = 0
         
         if count == 0:
             # Criar usuário padrão
@@ -131,3 +157,26 @@ def logout():
         if key in st.session_state:
             del st.session_state[key]
     st.rerun()
+
+def is_authenticated():
+    """Verifica se o usuário está autenticado"""
+    return 'authenticated' in st.session_state and st.session_state.authenticated
+
+def get_current_user():
+    """Retorna o usuário atual"""
+    if 'user' in st.session_state:
+        return st.session_state.user
+    return None
+
+def require_auth():
+    """Decorator para páginas que requerem autenticação"""
+    if not is_authenticated():
+        st.error("🔒 Acesso negado. Faça login primeiro.")
+        st.stop()
+
+def check_user_type(required_type):
+    """Verifica se o usuário tem o tipo necessário"""
+    user = get_current_user()
+    if not user or user['tipo'] != required_type:
+        st.error(f"🚫 Acesso restrito para {required_type}s")
+        st.stop()
