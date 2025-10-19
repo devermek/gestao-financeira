@@ -1,230 +1,110 @@
 import streamlit as st
-import pandas as pd
 import hashlib
-from config.database import get_db_connection, init_db
+import os
+from config.database import get_db_connection, get_current_db_type # Importa as funções de conexão e tipo de DB
+from utils.helpers import get_obra_config # Para buscar a config da obra no login, se necessário
 
-def get_all_active_users():
-    """Retorna todos os usuários ativos"""
-    try:
-        conn = get_db_connection()
-        users = pd.read_sql_query("""
-            SELECT id, nome, email, tipo FROM usuarios 
-            WHERE ativo = 1 
-            ORDER BY nome
-        """, conn)
-        conn.close()
-        return users
-    except Exception as e:
-        print(f"Erro ao buscar usuários: {e}")
-        return pd.DataFrame()  # Retorna DataFrame vazio se der erro
+# --- Funções de Autenticação ---
 
-def authenticate_user(email, senha):
-    """Autentica usuário"""
-    try:
-        conn = get_db_connection()
-        senha_hash = hashlib.sha256(senha.encode()).hexdigest()
-        
-        user = pd.read_sql_query("""
-            SELECT id, nome, email, tipo FROM usuarios 
-            WHERE email = ? AND senha = ? AND ativo = 1
-        """, conn, params=[email, senha_hash])
-        
-        conn.close()
-        
-        if not user.empty:
-            return user.iloc[0].to_dict()
-        return None
-    except Exception as e:
-        print(f"Erro na autenticação: {e}")
-        return None
+def hash_password(password):
+    """Cria um hash SHA256 da senha."""
+    return hashlib.sha256(password.encode()).hexdigest()
 
-def show_user_header():
-    """Exibe cabeçalho com informações do usuário logado"""
-    if 'user' in st.session_state and st.session_state.user is not None:
-        user = st.session_state.user
-        
-        # Converter para dict se for pandas Series (PostgreSQL)
-        if hasattr(user, 'to_dict'):
-            user = user.to_dict()
-        
-        col1, col2, col3 = st.columns([3, 1, 1])
-        
-        with col1:
-            st.write(f"👋 Olá, **{user['nome']}** ({user['tipo'].title()})")
-        
-        with col2:
-            st.write(f"📧 {user['email']}")
-        
-        with col3:
-            if st.button("🚪 Sair"):
-                logout()
-                
-def show_login_page():
-    """Exibe página de login"""
-    st.title("🏗️ Sistema de Gestão de Obras")
-    st.subheader("Controle Financeiro Profissional")
-    
-    # Verificar se as tabelas existem
-    users = get_all_active_users()
-    
-    if users.empty:
-        st.warning("⚠️ Banco de dados não inicializado!")
-        
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            if st.button("🔧 Inicializar Banco de Dados", type="primary"):
-                with st.spinner("Inicializando banco de dados..."):
-                    try:
-                        init_db()
-                        create_first_user()
-                        st.success("✅ Banco de dados inicializado com sucesso!")
-                        st.info("🔄 Recarregue a página para continuar")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Erro ao inicializar: {e}")
-        
-        with col2:
-            st.info("👆 Clique no botão para criar as tabelas do banco de dados")
-        
-        return
-    
-    # Se chegou aqui, o banco está OK
-    _show_quick_login()
-
-def _show_quick_login():
-    """Exibe login rápido"""
-    st.success("🚀 Login rápido")
-    
-    users = get_all_active_users()
-    
-    if users.empty:
-        st.warning("Nenhum usuário encontrado. Cadastre o primeiro usuário.")
-        if st.button("👤 Criar Primeiro Usuário"):
-            create_first_user()
-            st.success("✅ Usuário criado! Recarregue a página.")
-            st.rerun()
-        return
-    
-    # Criar opções para selectbox
-    user_options = {}
-    for _, user in users.iterrows():
-        label = f"{user['nome']} ({user['tipo'].title()})"
-        user_options[label] = user
-    
-    selected_label = st.selectbox(
-        "Selecione seu usuário:",
-        options=list(user_options.keys()),
-        key="quick_login_user"
-    )
-    
-    if selected_label and st.button("🚀 Entrar", type="primary"):
-        user = user_options[selected_label]
-        
-        # Converter pandas Series para dict (compatibilidade PostgreSQL/SQLite)
-        if hasattr(user, 'to_dict'):
-            user = user.to_dict()
-        
-        st.session_state.user = user
-        st.session_state.authenticated = True
-        st.rerun()
-        
-def create_first_user():
-    """Cria o primeiro usuário do sistema e dados iniciais"""
+def login_user(email, password):
+    """
+    Tenta autenticar um usuário no banco de dados.
+    Retorna o dicionário do usuário se a autenticação for bem-sucedida, caso contrário, None.
+    """
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        db_type = get_current_db_type()
+
+        # Usar %s para PostgreSQL e ? para SQLite para placeholders
+        param_placeholder = '%s' if db_type == 'postgresql' else '?'
+
+        hashed_password = hash_password(password)
+
+        query = f"""
+            SELECT id, nome, email, tipo, ativo FROM usuarios
+            WHERE email = {param_placeholder} AND senha = {param_placeholder} AND ativo = 1
+        """
         
-        # Verificar se já existe usuário
-        try:
-            cursor.execute("SELECT COUNT(*) FROM usuarios")
-            count = cursor.fetchone()[0]
-        except:
-            count = 0
+        cursor.execute(query, (email, hashed_password))
+        user_data = cursor.fetchone()
         
-        if count == 0:
-            # Criar usuário padrão
-            senha_hash = hashlib.sha256("123456".encode()).hexdigest()
-            cursor.execute("""
-                INSERT INTO usuarios (nome, email, senha, tipo) 
-                VALUES (?, ?, ?, ?)
-            """, ("Deverson", "deverson@obra.com", senha_hash, "gestor"))
-            
-            print("✅ Usuário padrão criado: deverson@obra.com / 123456")
-        
-        # Verificar e criar categorias padrão
-        try:
-            cursor.execute("SELECT COUNT(*) FROM categorias")
-            cat_count = cursor.fetchone()[0]
-        except:
-            cat_count = 0
-            
-        if cat_count == 0:
-            # Criar categorias padrão
-            categorias_padrao = [
-                ("Material de Construção", "Cimento, areia, brita, tijolos", 50000.00),
-                ("Mão de Obra", "Pedreiros, serventes, eletricistas", 30000.00),
-                ("Ferramentas", "Equipamentos e ferramentas", 5000.00),
-                ("Transporte", "Frete e transporte de materiais", 3000.00),
-                ("Diversos", "Gastos diversos da obra", 2000.00)
-            ]
-            
-            for nome, desc, orcamento in categorias_padrao:
-                cursor.execute("""
-                    INSERT INTO categorias (nome, descricao, orcamento_previsto) 
-                    VALUES (?, ?, ?)
-                """, (nome, desc, orcamento))
-            
-            print("✅ Categorias padrão criadas!")
-        
-        # Verificar e criar configuração da obra
-        try:
-            cursor.execute("SELECT COUNT(*) FROM obra_config")
-            obra_count = cursor.fetchone()[0]
-        except:
-            obra_count = 0
-            
-        if obra_count == 0:
-            cursor.execute("""
-                INSERT INTO obra_config (nome_obra, orcamento_total, data_inicio) 
-                VALUES (?, ?, DATE('now'))
-            """, ("Minha Obra", 90000.00))
-            
-            print("✅ Configuração da obra criada!")
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
+        if user_data:
+            # Converte a tupla ou RealDictRow para um dicionário padrão
+            if isinstance(user_data, dict): # Já é um RealDictRow do psycopg2
+                return user_data
+            else: # sqlite3.Row ou tupla
+                return {
+                    'id': user_data[0],
+                    'nome': user_data[1],
+                    'email': user_data[2],
+                    'tipo': user_data[3],
+                    'ativo': user_data[4]
+                }
+        return None
     except Exception as e:
-        print(f"Erro ao criar dados iniciais: {e}")
-        
-def logout():
-    """Faz logout do usuário"""
-    for key in ['user', 'authenticated']:
-        if key in st.session_state:
-            del st.session_state[key]
-    st.rerun()
+        st.error(f"Erro ao tentar login: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
 
-def is_authenticated():
-    """Verifica se o usuário está autenticado"""
-    return 'authenticated' in st.session_state and st.session_state.authenticated
+def show_login_page():
+    """Exibe a página de login."""
+    st.title("🔐 Login")
 
-def get_current_user():
-    """Retorna o usuário atual"""
-    if 'user' in st.session_state:
-        return st.session_state.user
-    return None
+    # Campos de input
+    email = st.text_input("Email")
+    password = st.text_input("Senha", type="password")
 
-def require_auth():
-    """Decorator para páginas que requerem autenticação"""
-    if not is_authenticated():
-        st.error("🔒 Acesso negado. Faça login primeiro.")
-        st.stop()
+    # Botão de login
+    if st.button("Entrar", type="primary"):
+        if email and password:
+            user = login_user(email, password)
+            if user:
+                st.session_state.user = user
+                st.session_state.logged_in = True
+                st.success("Login realizado com sucesso!")
+                st.rerun() # Recarrega a página para sair do login e ir para o app
+            else:
+                st.error("Email ou senha incorretos, ou usuário inativo.")
+        else:
+            st.warning("Por favor, preencha todos os campos.")
 
-def check_user_type(required_type):
-    """Verifica se o usuário tem o tipo necessário"""
-    user = get_current_user()
-    if not user or user['tipo'] != required_type:
-        st.error(f"🚫 Acesso restrito para {required_type}s")
-        st.stop()
+# --- Cabeçalho do Usuário Logado ---
+
+def show_user_header(user, obra_config):
+    """Exibe o cabeçalho superior da aplicação com informações do usuário e da obra."""
+    st.markdown(f"""
+        <div style="background-color: #2c3e50; padding: 10px; border-radius: 5px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="color: white; font-size: 1.2em; font-weight: bold;">
+                🏗️ {obra_config.get('nome_obra', 'Nome da Obra')}
+            </div>
+            <div style="color: #bdc3c7; font-size: 0.9em;">
+                Usuário: <strong>{user.get('nome', 'N/A')}</strong> ({user.get('tipo', 'N/A').title()})
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    # Você pode adicionar mais elementos de cabeçalho aqui se necessário
+    
+    # Exemplo de botão de logout
+    if st.sidebar.button("Sair", help="Fazer Logout"):
+        st.session_state.user = None
+        st.session_state.logged_in = False
+        st.session_state.current_page = 'login' # Ou outra página inicial
+        st.rerun()
+
+# --- Placeholder para outras funções de usuário, se houver ---
+# def show_profile_page(user):
+#     st.subheader(f"Perfil de {user['nome']}")
+#     st.write(f"Email: {user['email']}")
+#     st.write(f"Tipo: {user['tipo']}")
+
+# def register_user_page():
+#     st.subheader("Registrar Novo Usuário")
+#     # ... formulário de registro ...
