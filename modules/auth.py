@@ -40,8 +40,12 @@ def authenticate_user(email, senha):
 
 def show_user_header():
     """Exibe cabeçalho com informações do usuário logado"""
-    if 'user' in st.session_state and st.session_state.user:
+    if 'user' in st.session_state and st.session_state.user is not None:
         user = st.session_state.user
+        
+        # Converter para dict se for pandas Series (PostgreSQL)
+        if hasattr(user, 'to_dict'):
+            user = user.to_dict()
         
         col1, col2, col3 = st.columns([3, 1, 1])
         
@@ -54,7 +58,7 @@ def show_user_header():
         with col3:
             if st.button("🚪 Sair"):
                 logout()
-
+                
 def show_login_page():
     """Exibe página de login"""
     st.title("🏗️ Sistema de Gestão de Obras")
@@ -116,10 +120,15 @@ def _show_quick_login():
     
     if selected_label and st.button("🚀 Entrar", type="primary"):
         user = user_options[selected_label]
+        
+        # Converter pandas Series para dict (compatibilidade PostgreSQL/SQLite)
+        if hasattr(user, 'to_dict'):
+            user = user.to_dict()
+        
         st.session_state.user = user
         st.session_state.authenticated = True
         st.rerun()
-
+        
 def create_first_user():
     """Cria o primeiro usuário do sistema"""
     try:
