@@ -23,6 +23,8 @@ except Exception as e:
 
 # Criar dados de demonstração se necessário (apenas na primeira execução)
 try:
+    # Apenas um aviso se demo_data não existe, não é um erro crítico
+    # Se 'demo_data.py' não existir, esta linha será ignorada sem erro crítico
     from demo_data import create_demo_data
     create_demo_data()
 except ImportError:
@@ -36,18 +38,18 @@ load_css()
 st.markdown(
     """
     <style>
-    /* Ajusta o tamanho da fonte para as métricas da sidebar */
+    /* Ajusta o tamanho da fonte para as métricas, mantém este */
     div[data-testid="stSidebar"] div[data-testid="stMetricValue"] {
         font-size: 24px !important;
     }
 
-    /* Força o tema escuro na sidebar e garante texto claro */
+    /* Estilização geral da sidebar para garantir contraste e visibilidade */
     div[data-testid="stSidebar"] {
-        background-color: #0E1117 !important; /* Fundo escuro */
-        color: #FAFAFA !important; /* Texto claro */
+        background-color: var(--secondary-background, #262730) !important; /* Cor de fundo padrão Streamlit dark theme */
+        color: var(--text-color, #FAFAFA) !important; /* Cor do texto padrão Streamlit dark theme */
     }
 
-    /* Garante que TODO o conteúdo de texto dentro da sidebar seja visível e claro */
+    /* Garante que o conteúdo de texto dentro da sidebar seja visível */
     div[data-testid="stSidebar"] p,
     div[data-testid="stSidebar"] h1,
     div[data-testid="stSidebar"] h2,
@@ -55,36 +57,30 @@ st.markdown(
     div[data-testid="stSidebar"] h4,
     div[data-testid="stSidebar"] span,
     div[data-testid="stSidebar"] label,
-    div[data-testid="stSidebar"] .stMarkdown,
-    div[data-testid="stSidebar"] .stButton > button,
-    div[data-testid="stSidebar"] .stMetric,
-    div[data-testid="stSidebar"] a { /* Adicionado 'a' para links */
-        color: #FAFAFA !important; /* Texto claro para todos os elementos */
-    }
-    
-    /* Ajusta o estilo do selectbox na sidebar */
-    div[data-testid="stSidebar"] div.stSelectbox > div > div {
-        background-color: #262730 !important; /* Fundo do selectbox ligeiramente mais claro */
-        color: #FAFAFA !important;
-        border: 1px solid #4B4B4B !important; /* Borda sutil para contraste */
-    }
-    div[data-testid="stSidebar"] div.stSelectbox > div > div > div > div > span {
-        color: #FAFAFA !important; /* Texto da opção selecionada */
-    }
-    /* Estilo para as opções do selectbox quando abertas (dropdown) */
-    .st-emotion-cache-1f190u8 > div > div, .st-emotion-cache-1f190u8 > div > div > div {
-        background-color: #262730 !important; /* Fundo do dropdown */
-        color: #FAFAFA !important;
-    }
-    .st-emotion-cache-1f190u8 > div > div:hover {
-        background-color: #31333F !important; /* Um tom mais escuro para hover nos itens */
-        color: #FAFAFA !important;
+    div[data-testid="stSidebar"] .stMarkdown {
+        color: var(--text-color, #FAFAFA) !important;
     }
 
-    /* Ajusta o cabeçalho e footer para melhor contraste em geral */
-    .header-custom, .footer-custom {
-        color: #FAFAFA !important;
-        background-color: #0E1117 !important;
+    /* Estilo para o selectbox da sidebar, garantindo visibilidade */
+    div[data-testid="stSidebar"] div.stSelectbox > div > label,
+    div[data-testid="stSidebar"] div.stSelectbox > div > div > div > div > span,
+    div[data-testid="stSidebar"] div.stSelectbox > div > div > div > div > div > span {
+        color: var(--text-color, #FAFAFA) !important;
+    }
+    div[data-testid="stSidebar"] div.stSelectbox > div > div {
+        background-color: var(--secondary-background, #262730) !important;
+        color: var(--text-color, #FAFAFA) !important;
+        border: 1px solid var(--text-color, #FAFAFA) !important; /* Adiciona borda para contraste */
+    }
+
+    /* Estilo para as opções do selectbox quando abertas (dropdown) */
+    .st-emotion-cache-1f190u8 > div > div { /* Classe Streamlit para o container do dropdown */
+        background-color: var(--secondary-background, #262730) !important;
+        color: var(--text-color, #FAFAFA) !important;
+    }
+    .st-emotion-cache-1f190u8 > div > div:hover {
+        background-color: var(--primary-background, #0E1117) !important; /* Um tom mais escuro para hover */
+        color: var(--text-color, #FAFAFA) !important;
     }
     </style>
     """,
@@ -113,7 +109,7 @@ st.sidebar.markdown(f"**Perfil:** {user['tipo'].title()}")
 
 # Definir opções de menu
 if user['tipo'] == 'gestor':
-    opcoes_menu = ["�� Tela Inicial", "💰 Lançamentos", "🖼️ Galeria", "📊 Relatórios", "👥 Usuários", "⚙️ Configurações"]
+    opcoes_menu = ["🏠 Tela Inicial", "�� Lançamentos", "��️ Galeria", "📊 Relatórios", "👥 Usuários", "⚙️ Configurações"]
 else: # Supondo que 'investidor' ou outro tipo tem acesso limitado
     opcoes_menu = ["🏠 Tela Inicial", "🖼️ Galeria", "📊 Relatórios"]
 
@@ -124,13 +120,12 @@ if 'last_sidebar_selection' not in st.session_state:
 # Seleção da página na sidebar
 page = st.sidebar.selectbox("Escolha uma opção:", opcoes_menu, label_visibility="collapsed", key="sidebar_main_selection")
 
-# Verifica se a seleção da sidebar mudou para acionar o JS (auto-colapso)
-if page != st.session_state.last_sidebar_selection:
+# Verifica se a seleção da sidebar mudou
+if st.session_state.sidebar_main_selection != st.session_state.last_sidebar_selection:
     st.session_state.page_just_selected = True
-    st.session_state.last_sidebar_selection = page
+    st.session_state.last_sidebar_selection = st.session_state.sidebar_main_selection
 else:
     st.session_state.page_just_selected = False
-
 
 # Sidebar com resumo
 st.sidebar.markdown("---")
@@ -144,7 +139,7 @@ restante = orcamento_referencia - total_gasto
 
 # --- Usando format_currency_br para os valores monetários ---
 st.sidebar.metric("💰 Total Gasto", f"R$ {format_currency_br(total_gasto)}")
-st.sidebar.metric("📈 % Executado", f"{percentual:.1f}%")
+st.sidebar.metric("�� % Executado", f"{percentual:.1f}%")
 
 if percentual > 100:
     st.sidebar.error(f"🚨 Orçamento Estourado em R$ {format_currency_br(abs(restante))}!")
@@ -168,14 +163,12 @@ elif page == "⚙️ Configurações" and user['tipo'] == 'gestor':
     configuracoes.show_configuracoes(user, obra_config)
 
 # === Injeção de JavaScript para recolher sidebar em mobile após seleção ===
-# A condição de disparo agora é 'page_just_selected' que é definida *antes*
-# do roteamento, garantindo que o JS seja injetado apenas quando uma nova página é selecionada.
 if st.session_state.page_just_selected:
     js_code = """
     <script>
     function collapseSidebarOnMobile() {
-        // Verifica se a largura da janela indica um dispositivo móvel (Streamlit usa 768px para mobile)
-        if (window.innerWidth <= 768) { 
+        // Verifica se a largura da janela indica um dispositivo móvel (ajuste o valor se necessário)
+        if (window.innerWidth < 768) { 
             const sidebarExpander = window.parent.document.querySelector('[data-testid="stSidebarExpander"]');
             // Se o botão de expandir/recolher existe e a sidebar está expandida (aria-expanded="true")
             if (sidebarExpander && sidebarExpander.getAttribute('aria-expanded') === 'true') {
@@ -184,8 +177,7 @@ if st.session_state.page_just_selected:
         }
     }
     // Adia a chamada para garantir que o DOM esteja completamente atualizado após o rerun do Streamlit
-    // Um atraso um pouco maior para garantir que o clique seja registrado em diferentes dispositivos
-    setTimeout(collapseSidebarOnMobile, 200); 
+    setTimeout(collapseSidebarOnMobile, 100); 
     </script>
     """
     st.markdown(js_code, unsafe_allow_html=True)
