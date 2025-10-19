@@ -1,97 +1,250 @@
 import streamlit as st
 import pandas as pd
-import sqlite3
+from config.database import get_db_connection, get_current_db_type
+from modules.auth import hash_password # Reutiliza a função de hashing de senha
 
-def show_usuarios(user):
-    """Exibe página de gestão de usuários"""
+def show_usuarios(current_user):
+    """Exibe a página de gestão de usuários."""
     st.header("👥 Gestão de Usuários")
-    
-    # Listar usuários existentes
-    _show_existing_users(user)
-    
-    # Adicionar novo usuário
-    _show_add_user_form()
 
-def _show_existing_users(current_user):
-    """Exibe lista de usuários existentes"""
-    conn = sqlite3.connect('obra.db')
-    usuarios = pd.read_sql_query("SELECT * FROM usuarios WHERE ativo = 1 ORDER BY nome", conn)
-    conn.close()
+    # Apenas usuários do tipo 'gestor' podem gerenciar outros usuários
+    if current_user['tipo'] != 'gestor':
+        st.warning("Você não tem permissão para gerenciar usuários. Por favor, contate o administrador.")
+        return
+
+    # Abas para organizar o conteúdo
+    tab1, tab2 = st.tabs(["📋 Listar Usuários", "➕ Adicionar Novo Usuário"])
+
+    with tab1:
+        _show_listar_usuarios(current_user)
     
-    if not usuarios.empty:
-        st.subheader("👤 Usuários Cadastrados")
+    with tab2:
+        _show_adicionar_usuario()
+
+def _show_listar_usuarios(current_user):
+    """Exibe a lista de usuários cadastrados com opções de edição/desativação."""
+    st.subheader("📋 Usuários Cadastrados")
+    
+    conn = get_db_connection()
+    try:
+        query = "SELECT id, nome, email, tipo, ativo, created_at FROM usuarios ORDER BY nome"
+        df = pd.read_sql_query(query, conn)
         
-        for _, usr in usuarios.iterrows():
-            with st.container():
-                col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
-                
-                with col1:
-                    st.write(f"**{usr['nome']}**")
-                
-                with col2:
-                    st.write(f"📧 {usr['email']}")
-                
-                with col3:
-                    tipo_emoji = "👤" if usr['tipo'] == 'gestor' else "💼"
-                    st.write(f"{tipo_emoji} {usr['tipo'].title()}")
-                
-                with col4:
-                    if usr['id'] != current_user['id']:  # Não pode desativar a si mesmo
-                        if st.button("🗑️", key=f"delete_user_{usr['id']}", help="Desativar usuário"):
-                            _deactivate_user(usr['id'], usr['nome'])
-                            st.rerun()
-                
-                st.markdown("---")
+        if df.empty:
+            st.info("Nenhum usuário cadastrado.")
+            return
 
-def _deactivate_user(user_id, user_name):
-    """Desativa um usuário"""
-    conn = sqlite3.connect('obra.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE usuarios SET ativo = 0 WHERE id = ?", (user_id,))
-    conn.commit()
-    conn.close()
-    st.success(f"✅ Usuário '{user_name}' desativado!")
+        # Exibe cada usuário em um expander para detalhes e edição
+        for index, user in df.iterrows():
+            user_status = "Ativo" if user['ativo'] == 1 else "Inativo"
+            status_emoji = "✅" if user['ativo'] == 1 else "❌"
+            
+            with st.expander(f"{status_emoji} {user['nome']} ({user['tipo'].title()}) - {user['email']}"):
+                st.write(f"**ID:** {user['id']}")
+                st.write(f"**Email:** {user['email']}")
+                st.write(f"**Tipo:** {user['tipo'].title()}")
+                st.write(f"**Status:** {user_status}")
+                st.write(f"**Criado em:** {user['created_at']}")
 
-def _show_add_user_form():
-    """Exibe formulário para adicionar novo usuário"""
+                # Formulário para editar este usuário específico
+                with st.form(key=f"edit_user_form_{user['id']}"):
+                    st.markdown("##### Editar Usuário")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        new_name = st.text_input("Nome", value=user['nome'], key=f"edit_name_{user['id']}")
+                        new_email = st.text_input("Email", value=user['email'], key=f"edit_email_{user['id']}")
+                    with col2:
+                        # Index para o selectbox
+                        tipo_index = 0 if user['tipo'] == "gestor" else 1
+                        new_type = st.selectbox("Tipo", ["gestor", "investidor"], index=tipo_index, key=f"edit_type_{user['id']}")
+                        new_status = st.checkbox("Ativo", value=user['ativo'] == 1, key=f"edit_status_{user['id']}")
+                    
+                    st.info("Deixe o campo de senha em branco para não alterar a senha atual.")
+                    new_password = st.text_input("Nova Senha", type="password", key=f"edit_password_{user['id']}")
+                    confirm_new_password = st.text_input("Confirmar Nova Senha", type="password", key=f"confirm_edit_password_{user['id']}")
+
+                    col_buttons = st.columns([1, 1, 1]) # 3 colunas para os botões
+                    with col_buttons[0]:
+                        if st.form_submit_button("💾 Salvar Alterações", type="primary", key=f"save_edit_{user['id']}"):
+                            _update_user(user['id'], new_name, new_email, new_type, 1 if new_status else 0, new_password, confirm_new_password)
+                    with col_buttons[1]:
+                        # Botão para alternar status (Ativar/Desativar)
+                        btn_label = "❌ Desativar Usuário" if user['ativo'] == 1 else "✅ Ativar Usuário"
+                        if st.form_submit_button(btn_label, type="secondary", key=f"toggle_status_{user['id']}"):
+                            _toggle_user_status(user['id'], 1 if user['ativo'] == 0 else 0) # Inverte o status
+                    with col_buttons[2]:
+                        if st.form_submit_button("🗑️ Excluir Usuário", type="secondary", key=f"delete_user_{user['id']}"):
+                             if st.session_state.user['id'] == user['id']:
+                                 st.error("Você não pode excluir sua própria conta enquanto estiver logado.")
+                             else:
+                                 if st.warning(f"Tem certeza que deseja excluir o usuário '{user['nome']}'? Esta ação é irreversível."):
+                                     _delete_user(user['id'])
+
+    except Exception as e:
+        st.error(f"Erro ao listar usuários: {e}")
+        # import traceback
+        # st.code(traceback.format_exc()) # Descomente para debug
+    finally:
+        conn.close()
+
+def _show_adicionar_usuario():
+    """Exibe o formulário para adicionar um novo usuário."""
     st.subheader("➕ Adicionar Novo Usuário")
-    
-    with st.form("novo_usuario"):
+    with st.form("add_user_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
-        
         with col1:
-            nome_usuario = st.text_input("Nome Completo", placeholder="Ex: João Silva")
-            email_usuario = st.text_input("Email", placeholder="joao@email.com")
-        
+            nome = st.text_input("Nome Completo", key="add_user_name")
+            email = st.text_input("Email", key="add_user_email")
         with col2:
-            senha_usuario = st.text_input("Senha", type="password", placeholder="Mínimo 6 caracteres")
-            tipo_usuario = st.selectbox("Tipo de Usuário", ["investidor", "gestor"])
+            tipo = st.selectbox("Tipo de Usuário", ["gestor", "investidor"], key="add_user_type")
+            status_ativo = st.checkbox("Ativo", value=True, key="add_user_active")
         
-        if st.form_submit_button("✅ Adicionar Usuário", use_container_width=True):
-            if nome_usuario and email_usuario and senha_usuario:
-                if len(senha_usuario) >= 6:
-                    if _create_user(nome_usuario, email_usuario, senha_usuario, tipo_usuario):
-                        st.success("✅ Usuário adicionado com sucesso!")
-                        st.rerun()
-                else:
-                    st.error("❌ Senha deve ter pelo menos 6 caracteres!")
-            else:
-                st.error("❌ Preencha todos os campos!")
+        password = st.text_input("Senha", type="password", key="add_user_password")
+        confirm_password = st.text_input("Confirmar Senha", type="password", key="add_user_confirm_password")
 
-def _create_user(nome, email, senha, tipo):
-    """Cria um novo usuário"""
-    conn = sqlite3.connect('obra.db')
-    cursor = conn.cursor()
+        if st.form_submit_button("✅ Criar Usuário", type="primary"):
+            _add_new_user(nome, email, tipo, 1 if status_ativo else 0, password, confirm_password)
+
+def _add_new_user(nome, email, tipo, ativo, password, confirm_password):
+    """Lógica para adicionar um novo usuário ao banco de dados."""
+    # Validação básica
+    if not nome or not email or not password or not confirm_password:
+        st.error("❌ Todos os campos obrigatórios devem ser preenchidos.")
+        return
+    if password != confirm_password:
+        st.error("❌ A senha e a confirmação de senha não coincidem.")
+        return
+    if len(password) < 6: # Exemplo de política de senha
+        st.error("❌ A senha deve ter no mínimo 6 caracteres.")
+        return
     
-    # Verificar se email já existe
-    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE email = ?", (email,))
-    if cursor.fetchone()[0] > 0:
-        st.error("❌ Email já cadastrado!")
-        conn.close()
-        return False
-    else:
-        cursor.execute("INSERT INTO usuarios (nome, email, senha, tipo) VALUES (?, ?, ?, ?)", 
-                      (nome, email, senha, tipo))
+    # Validação de formato de email (pode ser mais robusta com regex)
+    if "@" not in email or "." not in email:
+        st.error("❌ Formato de email inválido.")
+        return
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        db_type = get_current_db_type()
+        param_placeholder = '%s' if db_type == 'postgresql' else '?'
+
+        # Verificar se o email já existe
+        cursor.execute(f"SELECT COUNT(*) FROM usuarios WHERE email = {param_placeholder}", (email,))
+        if cursor.fetchone()[0] > 0:
+            st.error(f"❌ Já existe um usuário com o email '{email}'.")
+            return
+
+        hashed_password = hash_password(password)
+
+        insert_query = f"""
+            INSERT INTO usuarios (nome, email, senha, tipo, ativo)
+            VALUES ({param_placeholder}, {param_placeholder}, {param_placeholder}, {param_placeholder}, {param_placeholder})
+        """
+        cursor.execute(insert_query, (nome, email, hashed_password, tipo, ativo))
         conn.commit()
-        conn.close()
-        return True
+        st.success(f"🎉 Usuário '{nome}' ({email}) criado com sucesso!")
+        st.rerun() # Atualiza a página para mostrar o novo usuário na lista
+    except Exception as e:
+        st.error(f"❌ Erro ao criar usuário: {e}")
+        # import traceback
+        # st.code(traceback.format_exc()) # Descomente para debug
+    finally:
+        if conn:
+            conn.close()
+
+def _update_user(user_id, new_name, new_email, new_type, new_status_int, new_password, confirm_new_password):
+    """Lógica para atualizar um usuário existente."""
+    # Validação similar à adição, mas para atualização
+    if not new_name or not new_email:
+        st.error("❌ Nome e Email são campos obrigatórios.")
+        return
+    if new_password and new_password != confirm_new_password:
+        st.error("❌ A nova senha e a confirmação de senha não coincidem.")
+        return
+    if new_password and len(new_password) < 6:
+        st.error("❌ A nova senha deve ter no mínimo 6 caracteres.")
+        return
+    if "@" not in new_email or "." not in new_email:
+        st.error("❌ Formato de email inválido.")
+        return
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        db_type = get_current_db_type()
+        param_placeholder = '%s' if db_type == 'postgresql' else '?'
+
+        # Verificar se o novo email já existe para outro usuário (excluindo o usuário atual)
+        cursor.execute(f"SELECT COUNT(*) FROM usuarios WHERE email = {param_placeholder} AND id != {param_placeholder}", (new_email, user_id))
+        if cursor.fetchone()[0] > 0:
+            st.error(f"❌ Já existe outro usuário com o email '{new_email}'.")
+            return
+
+        update_fields = ["nome", "email", "tipo", "ativo"]
+        update_values = [new_name, new_email, new_type, new_status_int]
+        
+        if new_password: # Se uma nova senha foi fornecida
+            update_fields.append("senha")
+            update_values.append(hash_password(new_password))
+
+        # Constrói a query dinamicamente
+        update_query = f"UPDATE usuarios SET {', '.join([f'{field} = {param_placeholder}' for field in update_fields])} WHERE id = {param_placeholder}"
+        cursor.execute(update_query, tuple(update_values + [user_id]))
+        conn.commit()
+        st.success(f"🎉 Usuário ID {user_id} atualizado com sucesso!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"❌ Erro ao atualizar usuário: {e}")
+        # import traceback
+        # st.code(traceback.format_exc()) # Descomente para debug
+    finally:
+        if conn:
+            conn.close()
+
+def _toggle_user_status(user_id, new_status_int):
+    """Lógica para ativar ou desativar um usuário."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        db_type = get_current_db_type()
+        param_placeholder = '%s' if db_type == 'postgresql' else '?'
+        
+        cursor.execute(f"UPDATE usuarios SET ativo = {param_placeholder} WHERE id = {param_placeholder}", (new_status_int, user_id))
+        conn.commit()
+        status_text = "ativado" if new_status_int == 1 else "desativado"
+        st.success(f"🎉 Usuário ID {user_id} {status_text} com sucesso!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"❌ Erro ao alternar status do usuário: {e}")
+        # import traceback
+        # st.code(traceback.format_exc()) # Descomente para debug
+    finally:
+        if conn:
+            conn.close()
+
+def _delete_user(user_id):
+    """Lógica para excluir um usuário."""
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        db_type = get_current_db_type()
+        param_placeholder = '%s' if db_type == 'postgresql' else '?'
+
+        # Antes de deletar o usuário, é importante deletar quaisquer lançamentos
+        # ou arquivos associados para evitar erros de FOREIGN KEY, ou configurar CASCADE DELETE na tabela.
+        # Por simplicidade, aqui vamos focar apenas no delete do usuário,
+        # mas em um sistema real, essa lógica de integridade é crucial.
+
+        cursor.execute(f"DELETE FROM usuarios WHERE id = {param_placeholder}", (user_id,))
+        conn.commit()
+        st.success(f"�� Usuário ID {user_id} excluído permanentemente com sucesso!")
+        st.rerun()
+    except Exception as e:
+        st.error(f"❌ Erro ao excluir usuário: {e}")
+        st.info("Verifique se há lançamentos ou arquivos associados a este usuário que precisam ser tratados primeiro.")
+        # import traceback
+        # st.code(traceback.format_exc()) # Descomente para debug
+    finally:
+        if conn:
+            conn.close()
