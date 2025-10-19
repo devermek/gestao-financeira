@@ -84,7 +84,7 @@ else:
     st.sidebar.markdown("### 🏗️ Informações da Obra")
     if obra_config and obra_config.get('nome_obra'):
         st.sidebar.info(f"**{obra_config['nome_obra']}**")
-        st.sidebar.metric("💰 Orçamento", f"R\$ {obra_config.get('orcamento_total', 0):,.2f}")
+        st.sidebar.metric("💰 Orçamento", f"R$ {obra_config.get('orcamento_total', 0):,.2f}")
     else:
         st.sidebar.warning("Configure a obra primeiro")
     

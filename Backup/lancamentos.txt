@@ -11,7 +11,7 @@ def show_lancamentos(user):
     st.header("📊 Gestão de Lançamentos Financeiros")
     
     # Tabs para organizar
-    tab1, tab2, tab3 = st.tabs(["➕ Novo Lançamento", "�� Histórico", "🔍 Detalhes"])
+    tab1, tab2, tab3 = st.tabs(["➕ Novo Lançamento", "📜 Histórico", "🔍 Detalhes"])
     
     with tab1:
         _show_novo_lancamento(user)
@@ -26,7 +26,7 @@ def _show_novo_lancamento(user):
     """Formulário para novo lançamento"""
     st.subheader("➕ Adicionar Novo Lançamento")
     
-    # CSS customizado para os campos e botões
+    # CSS customizado para os campos e botões (apenas uma vez)
     st.markdown("""
     <style>
         .stTextInput > div > div > input,
@@ -121,9 +121,9 @@ def _show_novo_lancamento(user):
             )
             
             # Categoria
-            default_index = 0 if categoria_opcoes else None 
+            default_index = 0 # Sempre selecionar a primeira se houver opções
             categoria_selecionada = st.selectbox(
-                "��️ Categoria do Gasto", 
+                "🏷️ Categoria do Gasto", 
                 options=list(categoria_opcoes.keys()),
                 index=default_index,
                 placeholder="Escolha uma categoria..."
@@ -154,7 +154,7 @@ def _show_novo_lancamento(user):
         
         # Upload
         uploaded_files = st.file_uploader(
-            "📸 Comprovantes (Opcional)",
+            "�� Comprovantes (Opcional)",
             type=['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
             accept_multiple_files=True
         )
@@ -170,15 +170,20 @@ def _show_novo_lancamento(user):
         if submitted:
             # Validação
             erros = []
+            categoria_id = None # Inicializa categoria_id como None
             
             if not categoria_selecionada:
                 erros.append("⚠️ Selecione uma categoria")
+            else:
+                categoria_id = categoria_opcoes.get(categoria_selecionada)
+                if categoria_id is None:
+                    erros.append("⚠️ Categoria selecionada inválida ou não encontrada na base de dados.")
             
             if not valor or valor <= 0:
                 erros.append("💰 Digite um valor maior que R$ 0,00")
             
             if not descricao or not descricao.strip():
-                erros.append("�� Digite uma descrição")
+                erros.append("📝 Digite uma descrição")
             
             if erros:
                 st.error("❌ **Corrija os seguintes campos:**")
@@ -188,9 +193,6 @@ def _show_novo_lancamento(user):
             
             # Tentar salvar
             try:
-                # Buscar ID da categoria
-                categoria_id = categoria_opcoes[categoria_selecionada]
-                
                 # Conectar ao banco
                 conn = get_db_connection()
                 cursor = conn.cursor()
@@ -260,7 +262,7 @@ def _show_historico_lancamentos(user):
         )
     
     with col2:
-        data_inicio = st.date_input("�� Data Início", value=None)
+        data_inicio = st.date_input("🗓️ Data Início", value=None)
     
     with col3:
         data_fim = st.date_input("📅 Data Fim", value=None)
@@ -274,7 +276,7 @@ def _show_historico_lancamentos(user):
     lancamentos = _get_lancamentos_filtrados(categoria_filtro, data_inicio, data_fim)
     
     if lancamentos.empty:
-        st.info(" Nenhum lançamento encontrado com os filtros aplicados")
+        st.info("ℹ️ Nenhum lançamento encontrado com os filtros aplicados")
         return
     
     # Resumo
@@ -287,7 +289,7 @@ def _show_historico_lancamentos(user):
     st.markdown("---")
     
     # NOVA VISUALIZAÇÃO: Cards com comprovantes
-    st.markdown("### 📋 Lançamentos com Comprovantes")
+    st.markdown("### �� Lançamentos com Comprovantes")
     
     for _, lancamento in lancamentos.iterrows():
         # Verificar se tem arquivos anexados
@@ -310,7 +312,7 @@ def _show_historico_lancamentos(user):
             
             with col_header3:
                 st.markdown(f"**💰 R$ {format_currency_br(lancamento['valor'])}**")
-                st.caption(f" {lancamento['usuario']}")
+                st.caption(f"👤 {lancamento['usuario']}")
             
             with col_header4:
                 if tem_arquivos:
@@ -362,7 +364,6 @@ def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
                         
                         image = Image.open(io.BytesIO(conteudo))
                         st.image(image, caption=nome, use_container_width=True)
-                        
                         # Botões compactos
                         col_btn1, col_btn2 = st.columns(2)
                         
@@ -378,7 +379,7 @@ def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
                         
                         with col_btn2:
                             if user_tipo == 'gestor':
-                                if st.button("🗑️", key=f"del_hist_img_{img[0]}", help="Deletar"):
+                                if st.button("��️", key=f"del_hist_img_{img[0]}", help="Deletar"):
                                     success, message = FileManager.delete_file(img[0], user_id)
                                     if success:
                                         st.success(message)
@@ -391,7 +392,7 @@ def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
     
     # Mostrar documentos em lista
     if documentos:
-        st.markdown("####  Documentos")
+        st.markdown("#### 📄 Documentos")
         
         for doc in documentos:
             col_doc1, col_doc2, col_doc3 = st.columns([3, 1, 1])
@@ -401,7 +402,7 @@ def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
                 if doc[1].lower().endswith('.pdf'):
                     emoji = "📄"
                 elif doc[1].lower().endswith(('.doc', '.docx')):
-                    emoji = ""
+                    emoji = "��"
                 elif doc[1].lower().endswith(('.xls', '.xlsx', '.csv')):
                     emoji = "📊"
                 else:
@@ -446,7 +447,7 @@ def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
                             
 def _show_detalhes_lancamento(user):
     """Exibe detalhes de um lançamento específico"""
-    st.subheader("�� Buscar Lançamento por ID")
+    st.subheader("🔍 Buscar Lançamento por ID")
     
     col1, col2 = st.columns([2, 1])
     
@@ -455,7 +456,7 @@ def _show_detalhes_lancamento(user):
     
     with col2:
         st.markdown("<br>", unsafe_allow_html=True)
-        buscar = st.button("🔎 Buscar", type="primary")
+        buscar = st.button("�� Buscar", type="primary")
     
     if buscar and lancamento_id_input:
         lancamento_id = int(lancamento_id_input)
@@ -482,11 +483,11 @@ def _show_detalhes_lancamento(user):
             st.markdown(f"""
             <div class="info-card">
                 <h4>📊 Lançamento #{lancamento[0]}</h4>
-                <p><strong> Data:</strong> {format_date_br(lancamento[1])}</p>
-                <p><strong>🏷️ Categoria:</strong> {lancamento[6]}</p>
+                <p><strong>🗓️ Data:</strong> {format_date_br(lancamento[1])}</p>
+                <p><strong>��️ Categoria:</strong> {lancamento[6]}</p>
                 <p><strong>💰 Valor:</strong> R$ {format_currency_br(lancamento[3])}</p>
-                <p><strong> Descrição:</strong> {lancamento[2]}</p>
-                <p><strong>�� Usuário:</strong> {lancamento[7]}</p>
+                <p><strong>📝 Descrição:</strong> {lancamento[2]}</p>
+                <p><strong>👤 Usuário:</strong> {lancamento[7]}</p>
                 <p><strong>🕐 Criado em:</strong> {lancamento[5]}</p>
                 {f'<p><strong>📋 Observações:</strong> {lancamento[4]}</p>' if lancamento[4] else ''}
             </div>
