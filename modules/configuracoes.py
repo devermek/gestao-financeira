@@ -21,7 +21,7 @@ def show_configuracoes(user, obra_config):
 
 def _show_obra_config(obra_config):
     """Configurações da obra"""
-    st.subheader("��️ Configurações da Obra")
+    st.subheader("🏗️ Configurações da Obra")
     
     with st.form("config_obra"):
         col1, col2 = st.columns(2)
@@ -44,7 +44,7 @@ def _show_obra_config(obra_config):
         
         with col2:
             data_inicio = st.date_input(
-                "📅 Data de Início",
+                "�� Data de Início",
                 value=obra_config['data_inicio'] if obra_config['data_inicio'] else date.today(),
                 help="Data de início da obra"
             )
@@ -208,10 +208,8 @@ def _show_categorias_config():
             if nome_nova:
                 success = _create_categoria(nome_nova, descricao_nova, orcamento_nova)
                 if success:
-                    st.success("✅ Nova categoria criada!")
-                    st.rerun()
-                else:
-                    st.error("❌ Erro ao criar categoria!")
+                    st.rerun() # Recarregar para mostrar a nova categoria
+                # Mensagens de sucesso/erro já estão dentro de _create_categoria
             else:
                 st.error("❌ Digite um nome para a categoria!")
 
@@ -246,12 +244,22 @@ def _create_categoria(nome, descricao, orcamento):
             VALUES (?, ?, ?, 1)
         """, (nome, descricao, orcamento))
         
+        new_id = cursor.lastrowid # Tenta obter o ID da última linha inserida
+        
         conn.commit()
         conn.close()
-        return True
+        
+        if new_id:
+            st.success(f"✅ Nova categoria '{nome}' criada com sucesso com ID: {new_id}!")
+            return True
+        else:
+            st.error("❌ Erro ao criar categoria: O ID da nova categoria não foi retornado. Verifique a configuração do banco de dados (ex: autoincrement ou RETURNING id para PostgreSQL).")
+            return False
         
     except Exception as e:
-        print(f"Erro ao criar categoria: {e}")
+        st.error(f"❌ Erro ao criar categoria: {str(e)}")
+        # import traceback
+        # st.code(traceback.format_exc()) # Descomente para debug mais detalhado
         return False
 
 def _show_sistema_config(user):
@@ -296,7 +304,7 @@ def _show_sistema_config(user):
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("�� Usuários Ativos", total_usuarios)
+            st.metric("👥 Usuários Ativos", total_usuarios)
         
         with col2:
             st.metric("🏷️ Categorias Ativas", total_categorias)
