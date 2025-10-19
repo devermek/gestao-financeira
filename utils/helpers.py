@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime, date
-from config.database import get_db_connection
+from config.database import get_db_connection, get_current_db_type # Import get_current_db_type
 import streamlit as st # Mantido para st.error em blocos except para feedback ao usuário
 
 def format_date_br(data):
@@ -36,7 +36,11 @@ def get_obra_config():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("""
+        db_type = get_current_db_type()
+        # No PostgreSQL, os parâmetros são $1, $2, etc. No SQLite, são ?.
+        param_char = '$' if db_type == 'postgresql' else '?'
+
+        cursor.execute(f"""
             SELECT id, nome_obra, orcamento_total, data_inicio, data_previsao_fim
             FROM obra_config 
             ORDER BY id DESC 
@@ -59,12 +63,19 @@ def get_obra_config():
             conn = get_db_connection() # Reabre a conexão para a inserção
             cursor = conn.cursor()
             
-            cursor.execute("""
-                INSERT INTO obra_config (nome_obra, orcamento_total, data_inicio, data_previsao_fim)
-                VALUES (?, ?, ?, ?)
-            """, ("Nova Obra", 0.0, None, None))
+            if db_type == 'postgresql':
+                cursor.execute(f"""
+                    INSERT INTO obra_config (nome_obra, orcamento_total, data_inicio, data_previsao_fim)
+                    VALUES (%s, %s, %s, %s) RETURNING id
+                """, ("Nova Obra", 0.0, None, None))
+                obra_id = cursor.fetchone()[0]
+            else:
+                cursor.execute(f"""
+                    INSERT INTO obra_config (nome_obra, orcamento_total, data_inicio, data_previsao_fim)
+                    VALUES (?, ?, ?, ?)
+                """, ("Nova Obra", 0.0, None, None))
+                obra_id = cursor.lastrowid
             
-            obra_id = cursor.lastrowid
             conn.commit()
             conn.close()
             
@@ -122,7 +133,10 @@ def get_categoria_by_id(categoria_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT id, nome, orcamento_previsto FROM categorias WHERE id = ? AND ativo = 1", (categoria_id,))
+        db_type = get_current_db_type()
+        param_char = '%s' if db_type == 'postgresql' else '?'
+
+        cursor.execute(f"SELECT id, nome, orcamento_previsto FROM categorias WHERE id = {param_char} AND ativo = 1", (categoria_id,))
         categoria = cursor.fetchone()
         conn.close()
         
@@ -143,11 +157,21 @@ def get_dados_dashboard():
     """Busca dados para o dashboard"""
     try:
         conn = get_db_connection()
-        
+        db_type = get_current_db_type()
+
+        # Diferença de funções de data entre SQLite e PostgreSQL
+        if db_type == 'postgresql':
+            strftime_func = "to_char(data, 'YYYY-MM')"
+            date_ago_func = "NOW() - INTERVAL '6 months'"
+        else: # sqlite
+            strftime_func = "strftime('%Y-%m', data)"
+            date_ago_func = "date('now', '-6 months')"
+
+
         total_gasto_query = "SELECT COALESCE(SUM(valor), 0) FROM lancamentos"
         total_gasto = conn.execute(total_gasto_query).fetchone()[0]
         
-        gastos_categoria = pd.read_sql_query("""
+        gastos_categoria = pd.read_sql_query(f"""
             SELECT 
                 c.id,
                 c.nome,
@@ -162,13 +186,13 @@ def get_dados_dashboard():
         
         total_previsto_categorias = gastos_categoria['orcamento_previsto'].sum()
         
-        evolucao = pd.read_sql_query("""
+        evolucao = pd.read_sql_query(f"""
             SELECT 
-                strftime('%Y-%m', data) as mes,
+                {strftime_func} as mes,
                 SUM(valor) as total
             FROM lancamentos
-            WHERE data >= date('now', '-6 months')
-            GROUP BY strftime('%Y-%m', data)
+            WHERE data >= {date_ago_func}
+            GROUP BY {strftime_func}
             ORDER BY mes
         """, conn)
         
@@ -200,12 +224,13 @@ def get_usuarios_ativos():
     """Busca todos os usuários ativos"""
     try:
         conn = get_db_connection()
-        df = pd.read_sql_query("""
+        query = """
             SELECT id, nome, email, tipo, ativo, created_at
             FROM usuarios 
             WHERE ativo = 1 
             ORDER BY nome
-        """, conn)
+        """
+        df = pd.read_sql_query(query, conn)
         conn.close()
         return df
         
@@ -217,7 +242,10 @@ def get_lancamentos_recentes(limite=10):
     """Busca lançamentos mais recentes"""
     try:
         conn = get_db_connection()
-        df = pd.read_sql_query("""
+        db_type = get_current_db_type()
+        param_char = '%s' if db_type == 'postgresql' else '?'
+
+        df = pd.read_sql_query(f"""
             SELECT 
                 l.id,
                 l.data,
@@ -231,7 +259,7 @@ def get_lancamentos_recentes(limite=10):
             LEFT JOIN categorias c ON l.categoria_id = c.id
             LEFT JOIN usuarios u ON l.usuario_id = u.id
             ORDER BY l.created_at DESC
-            LIMIT ?
+            LIMIT {param_char}
         """, conn, params=[limite])
         conn.close()
         return df
@@ -246,7 +274,7 @@ def get_estatisticas_obra():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        total_lancamentos_query = "SELECT COUNT(*) FROM lancamentos"
+        total_lancamentos_query = "SELECT COALESCE(SUM(valor), 0) FROM lancamentos"
         total_lancamentos = conn.execute(total_lancamentos_query).fetchone()[0]
         
         total_gasto_query = "SELECT COALESCE(SUM(valor), 0) FROM lancamentos"
@@ -311,7 +339,7 @@ def get_status_categoria(percentual):
     if percentual > 100:
         return "🔴 Estourado", "error"
     elif percentual > 90:
-        return "🟡 Atenção", "warning"
+        return "⚠️ Atenção", "warning"
     elif percentual > 80:
         return "🟠 Cuidado", "warning"
     else:
@@ -341,13 +369,13 @@ def get_emoji_arquivo(nome_arquivo):
     extensao = get_extensao_arquivo(nome_arquivo)
     
     if extensao in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']:
-        return "��️"
+        return "🖼️"
     elif extensao == 'pdf':
         return "📄" # Alterado para um emoji mais comum para PDF/documentos
     elif extensao in ['doc', 'docx']:
         return "📝"
     elif extensao in ['xls', 'xlsx', 'csv']:
-        return "📊"
+        return "��"
     elif extensao == 'txt':
         return "📝"
     else:

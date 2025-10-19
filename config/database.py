@@ -1,34 +1,49 @@
 import sqlite3
 import os
-import pandas as pd
+import sys # Import sys para verificar o psycopg2
+
+# Variável global para armazenar o tipo de banco de dados uma vez detectado.
+# Isso evita re-determinar o tipo em cada execução/re-execução do script.
+_db_type_cache = None
 
 def get_db_connection():
     """Conecta ao banco de dados (SQLite local ou PostgreSQL no Render)"""
-    database_url = os.getenv('DATABASE_URL')
+    global _db_type_cache
+
+    # Determina o tipo de DB apenas uma vez por execução do Streamlit
+    if _db_type_cache is None:
+        database_url = os.getenv('DATABASE_URL')
+        if database_url:
+            try:
+                # Tenta importar psycopg2 para verificar se é PostgreSQL
+                import psycopg2
+                _db_type_cache = 'postgresql'
+            except ImportError:
+                # Se DATABASE_URL existe mas psycopg2 não, assume SQLite (erro de config?)
+                _db_type_cache = 'sqlite' 
+        else:
+            _db_type_cache = 'sqlite'
     
-    if database_url:
-        # Ambiente de produção (PostgreSQL)
+    if _db_type_cache == 'postgresql':
         try:
             import psycopg2
             from psycopg2.extras import RealDictCursor
+            database_url = os.getenv('DATABASE_URL')
             print(f"🔗 Tentando conectar ao PostgreSQL...")
-            
-            # Adicionar configurações SSL para Supabase/Neon
             if 'supabase.co' in database_url or 'neon.tech' in database_url:
                 conn = psycopg2.connect(database_url + "?sslmode=require", cursor_factory=RealDictCursor)
             else:
                 conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
-            
             print("✅ Conectado ao PostgreSQL!")
-            return conn, 'postgresql' # Retorna a conexão e o tipo
+            return conn
         except Exception as e:
             print(f"❌ Erro PostgreSQL ao conectar: {e}")
             print("🔄 Fallback para SQLite...")
-            # Fallback para SQLite se PostgreSQL falhar
-            return get_sqlite_connection() # Retorna a tupla (conn, 'sqlite')
-    else:
-        # Ambiente local (SQLite)
-        return get_sqlite_connection() # Retorna a tupla (conn, 'sqlite')
+            # Se PostgreSQL falhar, muda o cache para SQLite para esta execução e tenta SQLite
+            _db_type_cache = 'sqlite' 
+            return get_sqlite_connection()
+    else: # SQLite
+        return get_sqlite_connection()
 
 def get_sqlite_connection():
     """Conexão SQLite"""
@@ -36,31 +51,38 @@ def get_sqlite_connection():
     db_path = "obra_database.db"
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    return conn, 'sqlite' # Retorna a conexão e o tipo
+    return conn
+
+def get_current_db_type():
+    """Retorna o tipo de banco de dados atual (PostgreSQL ou SQLite)"""
+    global _db_type_cache
+    if _db_type_cache is None: # Garante que o tipo seja determinado se ainda não foi
+        # Chamar get_db_connection para que ele defina _db_type_cache internamente
+        # Mas fechar a conexão imediatamente se não for usada.
+        conn = get_db_connection() 
+        conn.close()
+    return _db_type_cache
 
 def init_db():
-    """Inicializa o banco de dados com todas as tabelas"""
-    database_url = os.getenv('DATABASE_URL')
+    """Inicializa o banco de dados com todas as tabelas (CREATE TABLE IF NOT EXISTS)"""
+    current_db_type = get_current_db_type() # Usa a função auxiliar
     
-    if database_url:
+    if current_db_type == 'postgresql':
         try:
-            # PostgreSQL (Render/Supabase/Neon)
             init_postgresql()
         except Exception as e:
             print(f"❌ Erro ao inicializar PostgreSQL: {e}")
             print("🔄 Inicializando SQLite como fallback...")
             init_sqlite()
-    else:
-        # SQLite (Local)
+    else: # SQLite
         init_sqlite()
 
 def init_postgresql():
     """Inicializa banco PostgreSQL"""
     print("🐘 Inicializando PostgreSQL...")
-    conn, _ = get_db_connection() # Desempacota a tupla, ignorando o db_type para este uso
+    conn = get_db_connection() # Agora get_db_connection retorna apenas a conexão
     cursor = conn.cursor()
     
-    # Tabela de usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id SERIAL PRIMARY KEY,
@@ -73,7 +95,6 @@ def init_postgresql():
         )
     """)
     
-    # Tabela de categorias
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             id SERIAL PRIMARY KEY,
@@ -85,7 +106,6 @@ def init_postgresql():
         )
     """)
     
-    # Tabela de lançamentos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS lancamentos (
             id SERIAL PRIMARY KEY,
@@ -101,7 +121,6 @@ def init_postgresql():
         )
     """)
     
-    # Tabela de arquivos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS arquivos (
             id SERIAL PRIMARY KEY,
@@ -117,7 +136,6 @@ def init_postgresql():
         )
     """)
     
-    # Tabela de configurações da obra
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS obra_config (
             id SERIAL PRIMARY KEY,
@@ -128,7 +146,6 @@ def init_postgresql():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
     conn.commit()
     cursor.close()
     conn.close()
@@ -136,11 +153,10 @@ def init_postgresql():
 
 def init_sqlite():
     """Inicializa banco SQLite (código original)"""
-    print("�� Inicializando SQLite...")
-    conn, _ = get_sqlite_connection() # Desempacota a tupla, ignorando o db_type para este uso
+    print("📁 Inicializando SQLite...")
+    conn = get_sqlite_connection() # Agora get_sqlite_connection retorna apenas a conexão
     cursor = conn.cursor()
     
-    # Código SQLite original (assumindo que estas são as definições padrão)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -204,7 +220,6 @@ def init_sqlite():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
     conn.commit()
     conn.close()
     print("✅ SQLite inicializado com sucesso!")

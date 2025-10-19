@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date
-from config.database import get_db_connection
+from config.database import get_db_connection, get_current_db_type # Import get_current_db_type
 from utils.helpers import get_categorias_ativas
 
 def show_configuracoes(user, obra_config):
@@ -28,13 +28,13 @@ def _show_obra_config(obra_config):
         
         with col1:
             nome_obra = st.text_input(
-                "🏠 Nome da Obra",
+                "�� Nome da Obra",
                 value=obra_config['nome_obra'],
                 help="Nome que aparecerá no cabeçalho do sistema"
             )
             
             orcamento_total = st.number_input(
-                "�� Orçamento Total (R$)",
+                "💰 Orçamento Total (R$)",
                 min_value=0.0,
                 value=float(obra_config['orcamento_total']),
                 step=1000.0,
@@ -64,7 +64,7 @@ def _show_obra_config(obra_config):
                 
                 # Criar nova configuração
                 try:
-                    conn, _ = get_db_connection() # Obter conexão
+                    conn = get_db_connection() # Obter apenas a conexão
                     cursor = conn.cursor()
                     
                     cursor.execute("""
@@ -93,7 +93,7 @@ def _show_obra_config(obra_config):
 def _update_obra_config(nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_id):
     """Atualiza configurações da obra"""
     try:
-        conn, _ = get_db_connection() # Obter conexão
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -125,7 +125,7 @@ def _show_categorias_config():
         
         for categoria in categorias:
             # A chave do formulário agora está segura, pois categoria['id'] não será None
-            with st.expander(f"🏷️ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
+            with st.expander(f"��️ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
                 with st.form(key=f"edit_categoria_{categoria['id']}"): 
                     col1, col2 = st.columns(2)
                     
@@ -216,7 +216,7 @@ def _show_categorias_config():
 def _update_categoria(categoria_id, nome, descricao, orcamento, ativo):
     """Atualiza uma categoria"""
     try:
-        conn, _ = get_db_connection() # Obter conexão
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -236,8 +236,9 @@ def _update_categoria(categoria_id, nome, descricao, orcamento, ativo):
 def _create_categoria(nome, descricao, orcamento):
     """Cria uma nova categoria"""
     try:
-        conn, db_type = get_db_connection() # Obter conexão e tipo
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
+        db_type = get_current_db_type() # Obter o tipo de DB separadamente
         
         if db_type == 'postgresql':
             # Para PostgreSQL, use RETURNING id
@@ -288,10 +289,10 @@ def _show_sistema_config(user):
         st.info(f"**Status:** {'Ativo' if user.get('ativo', 1) else 'Inativo'}")
     
     # Estatísticas do sistema
-    st.markdown("### �� Estatísticas do Sistema")
+    st.markdown("### 📊 Estatísticas do Sistema")
     
     try:
-        conn, _ = get_db_connection() # Obter conexão
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
         
         # Contar registros
@@ -327,7 +328,7 @@ def _show_sistema_config(user):
         st.error(f"❌ Erro ao buscar estatísticas: {e}")
     
     # Backup e manutenção
-    st.markdown("### �� Manutenção")
+    st.markdown("### 🔧 Manutenção")
     
     col1, col2 = st.columns(2)
     
@@ -336,14 +337,15 @@ def _show_sistema_config(user):
             _verificar_integridade_banco()
     
     with col2:
-        if st.button("�� Recarregar Sistema", type="secondary"):
+        if st.button("🔄 Recarregar Sistema", type="secondary"):
             st.rerun()
 
 def _verificar_integridade_banco():
     """Verifica integridade do banco de dados"""
     try:
-        conn, db_type = get_db_connection() # Obter conexão e tipo
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
+        db_type = get_current_db_type() # Obter o tipo de DB separadamente
         
         if db_type == 'sqlite':
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
