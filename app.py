@@ -44,9 +44,13 @@ st.markdown("""
 if not is_authenticated():
     show_login_page()
 else:
-    # Usuário autenticado
+    # Usuário autenticado - OBTER DADOS NECESSÁRIOS
     user = get_current_user()
     obra_config = get_obra_config()
+    
+    # Converter user para dict se necessário (compatibilidade PostgreSQL)
+    if hasattr(user, 'to_dict'):
+        user = user.to_dict()
     
     # Cabeçalho do usuário
     show_user_header()
@@ -78,17 +82,20 @@ else:
     # Informações da obra na sidebar
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🏗️ Informações da Obra")
-    st.sidebar.info(f"**{obra_config['nome_obra']}**")
-    st.sidebar.metric("💰 Orçamento", f"R\$ {obra_config['orcamento_total']:,.2f}")
+    if obra_config and obra_config.get('nome_obra'):
+        st.sidebar.info(f"**{obra_config['nome_obra']}**")
+        st.sidebar.metric("💰 Orçamento", f"R\$ {obra_config.get('orcamento_total', 0):,.2f}")
+    else:
+        st.sidebar.warning("Configure a obra primeiro")
     
-    # Roteamento das páginas
+    # Roteamento das páginas - PASSAR OS ARGUMENTOS CORRETOS
     page_key = menu_options[selected_page]
     
     if page_key == "dashboard":
-        show_dashboard()
+        show_dashboard(user, obra_config)
     elif page_key == "lancamentos":
-        show_lancamentos()
+        show_lancamentos(user)
     elif page_key == "relatorios":
-        show_relatorios()
+        show_relatorios(user, obra_config)
     elif page_key == "configuracoes":
-        show_configuracoes()
+        show_configuracoes(user, obra_config)
