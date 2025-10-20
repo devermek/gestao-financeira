@@ -2,6 +2,7 @@ import streamlit as st
 import hashlib
 import os
 import sys # Adicionado para melhor tratamento de exceções
+import traceback # Adicionado para stack trace completo
 from config.database import get_db_connection, get_current_db_type
 
 # --- Funções de Autenticação ---
@@ -21,12 +22,10 @@ def login_user(email, password):
         cursor = conn.cursor()
         db_type = get_current_db_type()
 
-        # Usar %s para PostgreSQL e ? para SQLite para placeholders
         param_placeholder = '%s' if db_type == 'postgresql' else '?'
 
         hashed_password = hash_password(password)
 
-        # *** CORREÇÃO: Removida a cláusula WHERE duplicada ***
         query = f"""
             SELECT id, nome, email, tipo, ativo FROM usuarios
             WHERE email = {param_placeholder} AND senha = {param_placeholder} AND ativo = 1
@@ -36,7 +35,6 @@ def login_user(email, password):
         user_data = cursor.fetchone()
         
         if user_data:
-            # *** SIMPLIFICAÇÃO: Ambos RealDictRow (psycopg2) e sqlite3.Row (SQLite) permitem acesso tipo dicionário ***
             return {
                 'id': user_data['id'],
                 'nome': user_data['nome'],
@@ -46,8 +44,8 @@ def login_user(email, password):
             }
         return None
     except Exception as e:
-        # st.error(f"Erro ao tentar login: {e}") # Comentar para evitar spam na tela
-        print(f"DEBUG AUTH ERROR: Erro ao tentar login: {e}") # Imprimir no console para debug
+        print(f"DEBUG AUTH ERROR: Erro ao tentar login: {e}", file=sys.stderr) # Imprimir no console para debug
+        st.error("Erro no login. Verifique o email/senha ou contate o suporte.") # Mensagem genérica para o usuário
         return None
     finally:
         if conn:
@@ -57,14 +55,11 @@ def show_login_page():
     """Exibe a página de login."""
     st.title("🔐 Login")
 
-    # Garante que um admin inicial exista
-    ensure_first_admin_exists() # Este é o ponto do erro!
+    ensure_first_admin_exists()
 
-    # Campos de input
     email = st.text_input("Email", key="login_email_input")
     password = st.text_input("Senha", type="password", key="login_password_input")
 
-    # Botão de login
     if st.button("Entrar", type="primary"):
         if email and password:
             user = login_user(email, password)
@@ -72,7 +67,7 @@ def show_login_page():
                 st.session_state.user = user
                 st.session_state.logged_in = True
                 st.success("Login realizado com sucesso!")
-                st.rerun() # Recarrega a página para sair do login e ir para o app
+                st.rerun()
             else:
                 st.error("Email ou senha incorretos, ou usuário inativo.")
         else:
@@ -91,11 +86,10 @@ def show_user_header(user, obra_config):
         </div>
     """, unsafe_allow_html=True)
     
-    # Botão de logout na sidebar
     if st.sidebar.button("Sair", help="Fazer Logout"):
         st.session_state.user = None
         st.session_state.logged_in = False
-        st.rerun() # Reinicia a aplicação, que vai parar na tela de login
+        st.rerun()
 
 def ensure_first_admin_exists():
     """
@@ -104,53 +98,56 @@ def ensure_first_admin_exists():
     """
     conn = None
     try:
+        print(f"DEBUG AUTH - ensure_first_admin_exists: Iniciando verificação de admin...")
         conn = get_db_connection()
         cursor = conn.cursor()
         db_type = get_current_db_type()
 
-        print(f"DEBUG AUTH: Conexão obtida para ensure_first_admin_exists. DB Type: {db_type}")
+        print(f"DEBUG AUTH - ensure_first_admin_exists: Conexão obtida. DB Type: {db_type}")
 
         # Verifica se já existe algum usuário
+        print(f"DEBUG AUTH - ensure_first_admin_exists: Executando SELECT COUNT(*) FROM usuarios...")
         cursor.execute("SELECT COUNT(*) FROM usuarios")
-        count = cursor.fetchone()[0]
-        print(f"DEBUG AUTH: COUNT(*) FROM usuarios returned: {count}")
+        
+        # Garante que fetchone() não retorne None antes de tentar acessar [0]
+        count_result = cursor.fetchone()
+        count = count_result[0] if count_result else 0 # Defensive access
+        print(f"DEBUG AUTH - ensure_first_admin_exists: COUNT(*) FROM usuarios retornou: {count}")
 
         if count == 0:
+            print(f"DEBUG AUTH - ensure_first_admin_exists: Nenhum usuário encontrado. Preparando para criar admin.")
             st.warning("Nenhum usuário encontrado. Criando usuário administrador padrão.")
             default_email = "admin@obra.com"
-            default_password = "admin" # Senha fácil para o primeiro login
+            default_password = "admin"
             hashed_default_password = hash_password(default_password)
 
-            # Usar %s para PostgreSQL e ? para SQLite para placeholders
             param_placeholder_str = '%s' if db_type == 'postgresql' else '?'
 
-            # Inserir o usuário gestor padrão
             insert_query = f"""
                 INSERT INTO usuarios (nome, email, senha, tipo, ativo)
                 VALUES ({param_placeholder_str}, {param_placeholder_str}, {param_placeholder_str}, {param_placeholder_str}, 1)
             """
+            print(f"DEBUG AUTH - ensure_first_admin_exists: Executando INSERT do admin...")
             cursor.execute(insert_query, ("Administrador", default_email, hashed_default_password, "gestor"))
             conn.commit()
+            print(f"DEBUG AUTH - ensure_first_admin_exists: Admin inserido e commitado.")
             st.success(f"Usuário administrador criado: Email '{default_email}', Senha '{default_password}'. Por favor, faça login.")
             st.info("⚠️ Recomendamos alterar a senha após o primeiro login.")
         else:
-            print(f"DEBUG AUTH: Usuários encontrados: {count}. O sistema está pronto para login.")
-            pass # Não mostra nada se já tem usuários
+            print(f"DEBUG AUTH - ensure_first_admin_exists: Usuários encontrados: {count}. Sistema pronto.")
+            pass
             
     except Exception as e:
-        # *** MELHORIA NO TRATAMENTO DE ERRO: Exibe o tipo de exceção e a linha para depuração ***
-        exc_type, exc_obj, exc_tb = sys.exc_info()
-        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        st.error(f"Erro ao verificar/criar usuário administrador inicial: {exc_type.__name__} em {fname}:{exc_tb.tb_lineno} - {e}")
-        print(f"DEBUG AUTH ERROR: {exc_type.__name__} em {fname}:{exc_tb.tb_lineno} - {e}") # Imprime no console do Render para análise
+        # Imprime o stack trace completo para o console do Render
+        print("DEBUG AUTH ERROR - ensure_first_admin_exists: Exceção capturada!", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        # st.error(f"Erro ao verificar/criar usuário administrador inicial: {e}") # Evitar "0" direto
+        st.error("Erro interno ao configurar o administrador inicial. Verifique os logs do servidor para mais detalhes.")
     finally:
         if conn:
             conn.close()
-            print("DEBUG AUTH: Conexão fechada em ensure_first_admin_exists.")
+            print("DEBUG AUTH - ensure_first_admin_exists: Conexão fechada.")
 
 if __name__ == "__main__":
-    # Este bloco é executado apenas se 'auth.py' for o script principal,
-    # o que não é o caso quando é importado por 'app.py'.
-    # É útil para testar funções isoladamente, mas não afetará o fluxo do app.
     st.set_page_config(layout="centered")
     show_login_page()
