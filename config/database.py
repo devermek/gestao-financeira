@@ -3,6 +3,14 @@ import os
 import pandas as pd
 import psycopg2 # Garante que o psycopg2 está importado se necessário para fallback
 
+# Adicione esta nova função ao SEU ARQUIVO config/database.py
+def get_current_db_type():
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        return 'postgresql'
+    else:
+        return 'sqlite'
+
 def get_db_connection():
     """Conecta ao banco de dados (SQLite local ou PostgreSQL no Render)"""
     database_url = os.getenv('DATABASE_URL')
