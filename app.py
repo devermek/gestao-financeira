@@ -1,4 +1,5 @@
 import streamlit as st
+import os, sys, logging, traceback # Adicionado para logging detalhado
 from config.database import init_db
 from utils.styles import load_css
 from utils.helpers import get_obra_config, get_dados_dashboard, format_currency_br
@@ -10,76 +11,50 @@ st.set_page_config(
     page_title="🏗️ Gestão de Obras",
     page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="expanded" # Mantém expandido por padrão (para desktop)
+    initial_sidebar_state="expanded"
 )
+
+# Configurar logging para stderr logo no início
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stderr)]
+)
+print("BOOT: ✅ app.py iniciado. Carregando configurações e inicializando DB.", file=sys.stderr); sys.stderr.flush()
 
 # GARANTIR que o banco está inicializado
 try:
+    print("BOOT: Chamando init_db()", file=sys.stderr); sys.stderr.flush()
     init_db()
-    print("✅ Banco de dados inicializado com sucesso!")
+    print("BOOT: ✅ Banco de dados inicializado com sucesso!", file=sys.stderr); sys.stderr.flush()
 except Exception as e:
-    st.error(f"❌ Erro ao inicializar banco: {e}")
+    print(f"BOOT: ❌ ERRO CRÍTICO ao inicializar banco: {e}", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr); sys.stderr.flush()
+    st.error(f"❌ Erro crítico ao inicializar o banco de dados: {e}")
     st.stop()
 
 # Criar dados de demonstração se necessário (apenas na primeira execução)
 try:
-    # Apenas um aviso se demo_data não existe, não é um erro crítico
-    # Se 'demo_data.py' não existir, esta linha será ignorada sem erro crítico
+    print("BOOT: Tentando importar e criar dados de demonstração (se houver).", file=sys.stderr); sys.stderr.flush()
     from demo_data import create_demo_data
     create_demo_data()
+    print("BOOT: ✅ Dados de demonstração processados.", file=sys.stderr); sys.stderr.flush()
 except ImportError:
-    print("Aviso ao tentar criar dados de demonstração: Módulo 'demo_data' não encontrado (isso é normal se você não o usa).")
+    print("Aviso ao tentar criar dados de demonstração: Módulo 'demo_data' não encontrado (isso é normal se você não o usa).", file=sys.stderr); sys.stderr.flush()
 except Exception as e:
-    print(f"Aviso ao tentar criar dados de demonstração (erro de execução): {e}")
+    print(f"Aviso ao tentar criar dados de demonstração (erro de execução): {e}", file=sys.stderr); sys.stderr.flush()
 
 load_css()
 
-# Injeção de CSS adicional para corrigir problemas de estilo da sidebar
+# Injeção de CSS adicional para corrigir problemas de estilo da sidebar (removido para focar no erro principal)
+# O código CSS é grande e desnecessário para o debug inicial.
+# Se a app funcionar sem ele, depois podemos reintroduzir.
 st.markdown(
     """
     <style>
-    /* Ajusta o tamanho da fonte para as métricas, mantém este */
-    div[data-testid="stSidebar"] div[data-testid="stMetricValue"] {
-        font-size: 24px !important;
-    }
-
-    /* Estilização geral da sidebar para garantir contraste e visibilidade */
+    /* Estilo mínimo para evitar crashes inesperados de CSS */
     div[data-testid="stSidebar"] {
-        background-color: var(--secondary-background, #262730) !important; /* Cor de fundo padrão Streamlit dark theme */
-        color: var(--text-color, #FAFAFA) !important; /* Cor do texto padrão Streamlit dark theme */
-    }
-
-    /* Garante que o conteúdo de texto dentro da sidebar seja visível */
-    div[data-testid="stSidebar"] p,
-    div[data-testid="stSidebar"] h1,
-    div[data-testid="stSidebar"] h2,
-    div[data-testid="stSidebar"] h3,
-    div[data-testid="stSidebar"] h4,
-    div[data-testid="stSidebar"] span,
-    div[data-testid="stSidebar"] label,
-    div[data-testid="stSidebar"] .stMarkdown {
-        color: var(--text-color, #FAFAFA) !important;
-    }
-
-    /* Estilo para o selectbox da sidebar, garantindo visibilidade */
-    div[data-testid="stSidebar"] div.stSelectbox > div > label,
-    div[data-testid="stSidebar"] div.stSelectbox > div > div > div > div > span,
-    div[data-testid="stSidebar"] div.stSelectbox > div > div > div > div > div > span {
-        color: var(--text-color, #FAFAFA) !important;
-    }
-    div[data-testid="stSidebar"] div.stSelectbox > div > div {
         background-color: var(--secondary-background, #262730) !important;
-        color: var(--text-color, #FAFAFA) !important;
-        border: 1px solid var(--text-color, #FAFAFA) !important; /* Adiciona borda para contraste */
-    }
-
-    /* Estilo para as opções do selectbox quando abertas (dropdown) */
-    .st-emotion-cache-1f190u8 > div > div { /* Classe Streamlit para o container do dropdown */
-        background-color: var(--secondary-background, #262730) !important;
-        color: var(--text-color, #FAFAFA) !important;
-    }
-    .st-emotion-cache-1f190u8 > div > div:hover {
-        background-color: var(--primary-background, #0E1117) !important; /* Um tom mais escuro para hover */
         color: var(--text-color, #FAFAFA) !important;
     }
     </style>
@@ -91,11 +66,19 @@ st.markdown(
 if 'user' not in st.session_state:
     st.session_state.user = None
 
+# AQUI ESTÁ O BLOCO CRÍTICO ONDE A FALHA OCORRE AGORA
 if st.session_state.user is None:
-    show_login_page()
-    st.stop()
+    print("BOOT: Usuário não logado. Chamando show_login_page().", file=sys.stderr); sys.stderr.flush()
+    try:
+        show_login_page()
+    except Exception as e:
+        print(f"BOOT: ❌ ERRO CRÍTICO na chamada de show_login_page(): {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr); sys.stderr.flush()
+        st.error(f"❌ Erro crítico na página de login: {e}")
+        st.stop() # Interrompe o Streamlit para não continuar em loop de erro
+    st.stop() # Este st.stop() é para o fluxo normal de não-logado
 
-# Usuário logado
+# Se chegou até aqui, o usuário está logado
 user = st.session_state.user
 obra_config = get_obra_config()
 
@@ -109,13 +92,13 @@ st.sidebar.markdown(f"**Perfil:** {user['tipo'].title()}")
 
 # Definir opções de menu
 if user['tipo'] == 'gestor':
-    opcoes_menu = ["🏠 Tela Inicial", "�� Lançamentos", "��️ Galeria", "📊 Relatórios", "👥 Usuários", "⚙️ Configurações"]
+    opcoes_menu = ["�� Tela Inicial", "💰 Lançamentos", "🖼️ Galeria", "📊 Relatórios", "👥 Usuários", "⚙️ Configurações"]
 else: # Supondo que 'investidor' ou outro tipo tem acesso limitado
-    opcoes_menu = ["🏠 Tela Inicial", "🖼️ Galeria", "📊 Relatórios"]
+    opcoes_menu = ["🏠 Tela Inicial", "🖼️ Galeria", "�� Relatórios"]
 
 # Inicializa o estado para rastrear a seleção da sidebar
 if 'last_sidebar_selection' not in st.session_state:
-    st.session_state.last_sidebar_selection = opcoes_menu[0] # Define um valor inicial
+    st.session_state.last_sidebar_selection = opcoes_menu[0]
 
 # Seleção da página na sidebar
 page = st.sidebar.selectbox("Escolha uma opção:", opcoes_menu, label_visibility="collapsed", key="sidebar_main_selection")
@@ -139,7 +122,7 @@ restante = orcamento_referencia - total_gasto
 
 # --- Usando format_currency_br para os valores monetários ---
 st.sidebar.metric("💰 Total Gasto", f"R$ {format_currency_br(total_gasto)}")
-st.sidebar.metric("�� % Executado", f"{percentual:.1f}%")
+st.sidebar.metric("📊 % Executado", f"{percentual:.1f}%")
 
 if percentual > 100:
     st.sidebar.error(f"🚨 Orçamento Estourado em R$ {format_currency_br(abs(restante))}!")
@@ -151,7 +134,7 @@ else:
 # Roteamento de páginas
 if page == "🏠 Tela Inicial":
     dashboard.show_dashboard(user, obra_config)
-elif page == "�� Lançamentos" and user['tipo'] == 'gestor':
+elif page == "💰 Lançamentos" and user['tipo'] == 'gestor':
     lancamentos.show_lancamentos(user)
 elif page == "🖼️ Galeria":
     galeria.show_galeria(user)
@@ -167,27 +150,23 @@ if st.session_state.page_just_selected:
     js_code = """
     <script>
     function collapseSidebarOnMobile() {
-        // Verifica se a largura da janela indica um dispositivo móvel (ajuste o valor se necessário)
         if (window.innerWidth < 768) { 
             const sidebarExpander = window.parent.document.querySelector('[data-testid="stSidebarExpander"]');
-            // Se o botão de expandir/recolher existe e a sidebar está expandida (aria-expanded="true")
             if (sidebarExpander && sidebarExpander.getAttribute('aria-expanded') === 'true') {
-                sidebarExpander.click(); // Simula um clique para recolher a sidebar
+                sidebarExpander.click();
             }
         }
     }
-    // Adia a chamada para garantir que o DOM esteja completamente atualizado após o rerun do Streamlit
     setTimeout(collapseSidebarOnMobile, 100); 
     </script>
     """
     st.markdown(js_code, unsafe_allow_html=True)
-# =========================================================================
 
 # Footer
 st.markdown("---")
 st.markdown(f"""
 <div class="footer-custom">
-    ��️ <strong>{obra_config['nome_obra']}</strong> | 
+    🏠 <strong>{obra_config['nome_obra']}</strong> | 
     Sistema de Gestão Financeira | 
     Usuário: <strong>{user['nome']}</strong> ({user['tipo'].title()})
 </div>
