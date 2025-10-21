@@ -1,6 +1,7 @@
 import sqlite3
 import os
-import pandas as pd # Mantido caso você o utilize em outras partes do seu projeto
+import pandas as pd
+import sys # <--- ESTA LINHA ESTAVA FALTANDO E É A CAUSA DO ERRO!
 
 def get_db_connection():
     """Conecta ao banco de dados (SQLite local ou PostgreSQL no Render)"""
@@ -32,7 +33,7 @@ def get_db_connection():
 
 def get_sqlite_connection():
     """Conexão SQLite"""
-    print("🔗 Conectando ao SQLite local...", file=sys.stderr); sys.stderr.flush()
+    print("�� Conectando ao SQLite local...", file=sys.stderr); sys.stderr.flush()
     db_path = "obra_database.db"
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row # Permite acessar colunas por nome
@@ -56,7 +57,7 @@ def init_db():
             init_postgresql()
         except Exception as e:
             print(f"❌ Erro ao inicializar PostgreSQL: {e}", file=sys.stderr); sys.stderr.flush()
-            print("�� Inicializando SQLite como fallback...", file=sys.stderr); sys.stderr.flush()
+            print("🔄 Inicializando SQLite como fallback...", file=sys.stderr); sys.stderr.flush()
             init_sqlite()
     else:
         # SQLite (Local)
@@ -234,7 +235,7 @@ def init_postgresql():
 
 def init_sqlite():
     """Inicializa banco SQLite"""
-    print("📁 Inicializando SQLite...", file=sys.stderr); sys.stderr.flush()
+    print("�� Inicializando SQLite...", file=sys.stderr); sys.stderr.flush()
     conn = get_sqlite_connection()
     cursor = conn.cursor()
     
@@ -251,9 +252,6 @@ def init_sqlite():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    # Nota: SQLite não tem ON UPDATE CURRENT_TIMESTAMP nativo no CREATE TABLE para updated_at.
-    # O controle de updated_at para SQLite precisaria ser feito na lógica da aplicação
-    # ou com um TRIGGER separado se você usar uma versão específica do SQLite.
     
     # Tabela de categorias
     cursor.execute("""
