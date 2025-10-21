@@ -271,7 +271,10 @@ def gerar_relatorio_resumo():
                 'categoria_maior_percentual': categorias.loc[categorias['percentual_gasto'].idxmax()]['nome'] if not categorias.empty else 'N/A'
             }
         }
-        
+def format_currency_br(value):
+    """Formata valor como moeda brasileira (alias para format_currency)"""
+    return format_currency(value) 
+       
         return resumo
         
     except Exception as e:
