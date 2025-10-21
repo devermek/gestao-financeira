@@ -1,7 +1,7 @@
 import sqlite3
 import os
 import pandas as pd
-import sys # <-- ADICIONADO: Corrige o erro "name 'sys' is not defined"
+import sys # <-- ESTA LINHA É CRÍTICA!
 
 # Necessário para lidar com tipos de retorno de banco de dados em auth.py
 try:
@@ -37,7 +37,7 @@ def get_db_connection():
             return conn, 'postgresql'
         except Exception as e:
             print(f"❌ Erro PostgreSQL: {e}", file=sys.stderr); sys.stderr.flush()
-            print("�� Fallback para SQLite...", file=sys.stderr); sys.stderr.flush()
+            print("🔄 Fallback para SQLite...", file=sys.stderr); sys.stderr.flush()
             # Fallback para SQLite se PostgreSQL falhar
             conn = get_sqlite_connection()
             return conn, 'sqlite'
@@ -193,7 +193,7 @@ def init_postgresql():
 
 def init_sqlite():
     """Inicializa banco SQLite"""
-    print("📁 Inicializando SQLite...", file=sys.stderr); sys.stderr.flush()
+    print("�� Inicializando SQLite...", file=sys.stderr); sys.stderr.flush()
     conn = get_sqlite_connection()
     cursor = conn.cursor()
     

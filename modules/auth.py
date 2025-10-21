@@ -168,7 +168,7 @@ def ensure_first_admin_exists():
 
             insert_query = f"""
                 INSERT INTO usuarios (nome, email, senha, tipo, ativo)
-                VALUES ({param_placeholder_str}, {param_placeholder_str}, {param_placeholder_str}, {param_placeholder_str}, 1)
+                VALUES ({param_placeholder_str}, {param_placeholder_str}, {param_placeholder_str}, {param_placeholder_str}, {'TRUE' if db_type == 'postgresql' else 1})
             """
             print(f"DEBUG AUTH: Executando INSERT do admin: Email='{default_admin_email}' Tipo='gestor'.", file=sys.stderr); sys.stderr.flush()
             cursor.execute(insert_query, ("Administrador", default_admin_email, hashed_default_password, "gestor"))
