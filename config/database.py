@@ -1,10 +1,20 @@
 import sqlite3
 import os
 import pandas as pd
-import sys # <--- ESTA LINHA ESTAVA FALTANDO E É A CAUSA DO ERRO!
+import sys # <-- ADICIONADO: Corrige o erro "name 'sys' is not defined"
+
+# Necessário para lidar com tipos de retorno de banco de dados em auth.py
+try:
+    import psycopg2.extras
+    RealDictRow = psycopg2.extras.RealDictRow 
+except ImportError:
+    RealDictRow = type(None) # Tipo dummy caso psycopg2 não esteja instalado
 
 def get_db_connection():
-    """Conecta ao banco de dados (SQLite local ou PostgreSQL no Render)"""
+    """
+    Conecta ao banco de dados (SQLite local ou PostgreSQL no Render).
+    Retorna uma tupla: (objeto de conexão, string do tipo de banco de dados).
+    """
     database_url = os.getenv('DATABASE_URL')
     
     if database_url:
@@ -14,61 +24,89 @@ def get_db_connection():
             from psycopg2.extras import RealDictCursor
             print(f"🔗 Tentando conectar ao PostgreSQL...", file=sys.stderr); sys.stderr.flush()
             
-            # Adicionar configurações SSL para Supabase/Neon
+            dsn_to_connect = database_url
+            # Lógica mais robusta para adicionar sslmode=require
             if 'supabase.co' in database_url or 'neon.tech' in database_url:
-                conn = psycopg2.connect(database_url + "?sslmode=require", cursor_factory=RealDictCursor)
-            else:
-                conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
-            
+                if '?' in database_url:
+                    dsn_to_connect = database_url + "&sslmode=require"
+                else:
+                    dsn_to_connect = database_url + "?sslmode=require"
+
+            conn = psycopg2.connect(dsn_to_connect, cursor_factory=RealDictCursor)
             print("✅ Conectado ao PostgreSQL!", file=sys.stderr); sys.stderr.flush()
-            return conn
+            return conn, 'postgresql'
         except Exception as e:
             print(f"❌ Erro PostgreSQL: {e}", file=sys.stderr); sys.stderr.flush()
-            print("🔄 Fallback para SQLite...", file=sys.stderr); sys.stderr.flush()
+            print("�� Fallback para SQLite...", file=sys.stderr); sys.stderr.flush()
             # Fallback para SQLite se PostgreSQL falhar
-            return get_sqlite_connection()
+            conn = get_sqlite_connection()
+            return conn, 'sqlite'
     else:
         # Ambiente local (SQLite)
-        return get_sqlite_connection()
+        conn = get_sqlite_connection()
+        return conn, 'sqlite'
 
 def get_sqlite_connection():
     """Conexão SQLite"""
-    print("�� Conectando ao SQLite local...", file=sys.stderr); sys.stderr.flush()
+    print("🔗 Conectando ao SQLite local...", file=sys.stderr); sys.stderr.flush()
     db_path = "obra_database.db"
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row # Permite acessar colunas por nome
     return conn
 
-def get_current_db_type():
-    """Retorna o tipo de banco de dados atualmente em uso (PostgreSQL ou SQLite)."""
-    database_url = os.getenv('DATABASE_URL')
-    if database_url:
-        return 'postgresql'
-    else:
-        return 'sqlite'
+# REMOVIDO: A função get_current_db_type() não é mais necessária.
 
 def init_db():
     """Inicializa o banco de dados com todas as tabelas"""
-    database_url = os.getenv('DATABASE_URL')
-    
-    if database_url:
+    conn, db_type = get_db_connection() # Obtém a conexão e o tipo de DB real
+    conn.close() # Fecha a conexão, pois init_postgresql/sqlite abrirão a sua própria.
+
+    if db_type == 'postgresql':
         try:
-            # PostgreSQL (Render/Supabase/Neon)
             init_postgresql()
         except Exception as e:
             print(f"❌ Erro ao inicializar PostgreSQL: {e}", file=sys.stderr); sys.stderr.flush()
             print("🔄 Inicializando SQLite como fallback...", file=sys.stderr); sys.stderr.flush()
             init_sqlite()
     else:
-        # SQLite (Local)
         init_sqlite()
 
 def init_postgresql():
     """Inicializa banco PostgreSQL"""
     print("🐘 Inicializando PostgreSQL...", file=sys.stderr); sys.stderr.flush()
-    conn = get_db_connection()
+    conn, _ = get_db_connection() # Apenas a conexão é necessária aqui, o tipo já foi determinado
     cursor = conn.cursor()
     
+    # Helper para criação de triggers para simplificar e evitar o erro "near OR"
+    def create_update_timestamp_trigger(cursor, table_name, trigger_name_suffix):
+        trigger_name = f"update_{table_name}_{trigger_name_suffix}"
+        try:
+            cursor.execute(f"""
+                DROP TRIGGER IF EXISTS {trigger_name} ON {table_name};
+            """)
+            cursor.execute(f"""
+                CREATE TRIGGER {trigger_name}
+                BEFORE UPDATE ON {table_name}
+                FOR EACH ROW
+                EXECUTE FUNCTION update_timestamp();
+            """)
+        except Exception as e:
+            print(f"❌ Erro ao criar trigger '{trigger_name}' para a tabela '{table_name}': {e}", file=sys.stderr); sys.stderr.flush()
+
+    # Criação da função de trigger (sempre a primeira)
+    try:
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION update_timestamp()
+            RETURNS TRIGGER AS $$
+            BEGIN
+               NEW.updated_at = NOW();
+               RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        """)
+    except Exception as e:
+        print(f"❌ Erro ao criar função 'update_timestamp()': {e}", file=sys.stderr); sys.stderr.flush()
+
     # Tabela de usuários (com 'ativo' como BOOLEAN e 'updated_at')
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
@@ -82,27 +120,7 @@ def init_postgresql():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
-    # Trigger para atualizar 'updated_at' automaticamente no PostgreSQL
-    cursor.execute("""
-        CREATE OR REPLACE FUNCTION update_timestamp()
-        RETURNS TRIGGER AS $$
-        BEGIN
-           NEW.updated_at = NOW();
-           RETURN NEW;
-        END;
-        $$ LANGUAGE plpgsql;
-    """)
-    cursor.execute("""
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_users_updated_at') THEN
-                CREATE TRIGGER update_users_updated_at
-                BEFORE UPDATE ON usuarios
-                FOR EACH ROW
-                EXECUTE FUNCTION update_timestamp();
-            END IF;
-        END $$;
-    """)
+    create_update_timestamp_trigger(cursor, 'usuarios', 'updated_at')
     
     # Tabela de categorias
     cursor.execute("""
@@ -116,22 +134,7 @@ def init_postgresql():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    cursor.execute("""
-        CREATE OR REPLACE FUNCTION update_categorias_timestamp()
-        RETURNS TRIGGER AS $$
-        BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
-        $$ LANGUAGE plpgsql;
-    """)
-    cursor.execute("""
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_categorias_updated_at') THEN
-                CREATE TRIGGER update_categorias_updated_at
-                BEFORE UPDATE ON categorias
-                FOR EACH ROW
-                EXECUTE FUNCTION update_categorias_timestamp();
-            END IF;
-        END $$;
-    """)
+    create_update_timestamp_trigger(cursor, 'categorias', 'updated_at')
 
     # Tabela de lançamentos
     cursor.execute("""
@@ -149,22 +152,7 @@ def init_postgresql():
             FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
         )
     """)
-    cursor.execute("""
-        CREATE OR REPLACE FUNCTION update_lancamentos_timestamp()
-        RETURNS TRIGGER AS $$
-        BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
-        $$ LANGUAGE plpgsql;
-    """)
-    cursor.execute("""
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_lancamentos_updated_at') THEN
-                CREATE TRIGGER update_lancamentos_updated_at
-                BEFORE UPDATE ON lancamentos
-                FOR EACH ROW
-                EXECUTE FUNCTION update_lancamentos_timestamp();
-            END IF;
-        END $$;
-    """)
+    create_update_timestamp_trigger(cursor, 'lancamentos', 'updated_at')
     
     # Tabela de arquivos
     cursor.execute("""
@@ -182,22 +170,7 @@ def init_postgresql():
             FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
         )
     """)
-    cursor.execute("""
-        CREATE OR REPLACE FUNCTION update_arquivos_timestamp()
-        RETURNS TRIGGER AS $$
-        BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
-        $$ LANGUAGE plpgsql;
-    """)
-    cursor.execute("""
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_arquivos_updated_at') THEN
-                CREATE TRIGGER update_arquivos_updated_at
-                BEFORE UPDATE ON arquivos
-                FOR EACH ROW
-                EXECUTE FUNCTION update_arquivos_timestamp();
-            END IF;
-        END $$;
-    """)
+    create_update_timestamp_trigger(cursor, 'arquivos', 'updated_at')
     
     # Tabela de configurações da obra
     cursor.execute("""
@@ -211,22 +184,7 @@ def init_postgresql():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    cursor.execute("""
-        CREATE OR REPLACE FUNCTION update_obra_config_timestamp()
-        RETURNS TRIGGER AS $$
-        BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
-        $$ LANGUAGE plpgsql;
-    """)
-    cursor.execute("""
-        DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_obra_config_updated_at') THEN
-                CREATE TRIGGER update_obra_config_updated_at
-                BEFORE UPDATE ON obra_config
-                FOR EACH ROW
-                EXECUTE FUNCTION update_obra_config_timestamp();
-            END IF;
-        END $$;
-    """)
+    create_update_timestamp_trigger(cursor, 'obra_config', 'updated_at')
 
     conn.commit()
     cursor.close()
@@ -235,7 +193,7 @@ def init_postgresql():
 
 def init_sqlite():
     """Inicializa banco SQLite"""
-    print("�� Inicializando SQLite...", file=sys.stderr); sys.stderr.flush()
+    print("📁 Inicializando SQLite...", file=sys.stderr); sys.stderr.flush()
     conn = get_sqlite_connection()
     cursor = conn.cursor()
     
