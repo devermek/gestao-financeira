@@ -1,6 +1,7 @@
 import streamlit as st
 import os
-from config.database import get_db_connection # REMOVIDO: get_current_db_type
+from config.database import get_db_connection
+from datetime import datetime # <--- ADICIONADO: Necessário para formatar datas
 
 def get_obra_config():
     """
@@ -103,3 +104,19 @@ def get_dados_dashboard():
 def format_currency_br(value):
     """Formata um valor numérico para o formato monetário brasileiro."""
     return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def format_date_br(date_str):
+    """
+    Formata uma string de data (ex: 'YYYY-MM-DD') para o formato brasileiro (DD/MM/YYYY).
+    Retorna 'N/A' se a data for inválida ou None.
+    """
+    if not date_str:
+        return "N/A"
+    try:
+        # Tenta converter a string para um objeto datetime
+        date_obj = datetime.strptime(str(date_str), "%Y-%m-%d")
+        # Formata o objeto datetime para o formato desejado
+        return date_obj.strftime("%d/%m/%Y")
+    except ValueError:
+        # Se a conversão falhar, retorna a string original ou 'N/A'
+        return date_str # Ou "N/A" se preferir uma saída padronizada para erros de formato
