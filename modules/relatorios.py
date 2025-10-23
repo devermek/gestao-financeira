@@ -3,16 +3,16 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date, datetime, timedelta
-from utils.helpers import get_dados_dashboard, format_date_br
+from utils.helpers import get_dados_dashboard, format_date_br, format_currency_br # Adicionado format_currency_br
 from utils.pdf_generator import gerar_relatorio_pdf
-from config.database import get_db_connection # Removido get_current_db_type
+from config.database import get_db_connection
 
 def show_relatorios(user, obra_config):
     """Exibe página de relatórios"""
     st.header("📊 Relatórios e Análises")
     
     # Tabs para diferentes tipos de relatório
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Resumo Executivo", "📋 Detalhado", "📊 Análises", "📄 PDF"])
+    tab1, tab2, tab3, tab4 = st.tabs(["�� Resumo Executivo", "📋 Detalhado", "📊 Análises", "�� PDF"])
     
     with tab1:
         _show_resumo_executivo(obra_config)
@@ -28,10 +28,17 @@ def show_relatorios(user, obra_config):
 
 def _show_resumo_executivo(obra_config):
     """Exibe resumo executivo da obra"""
-    st.subheader("📈 Resumo Executivo")
+    st.subheader("�� Resumo Executivo")
     
-    # Buscar dados
-    total_gasto, total_previsto_categorias, gastos_categoria, evolucao, ultimos = get_dados_dashboard()
+    # Buscar dados do dashboard usando a função centralizada que retorna um dicionário
+    dados = get_dados_dashboard()
+    
+    # Extrair os dados necessários do dicionário
+    total_gasto = dados['total_gasto']
+    total_previsto_categorias = dados['total_previsto_categorias']
+    gastos_categoria = dados['gastos_categoria']
+    # 'gastos_mensais' e 'lancamentos_recentes' não são usados diretamente aqui no resumo,
+    # mas estão disponíveis em 'dados' se necessário em outras partes ou no gerador de PDF.
     
     if total_gasto == 0:
         st.info("📊 Ainda não há dados para gerar relatórios. Adicione alguns lançamentos primeiro.")
@@ -45,17 +52,17 @@ def _show_resumo_executivo(obra_config):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric("💰 Total Investido", f"R\$ {total_gasto:,.2f}")
-        st.metric("📊 Orçamento Total", f"R\$ {orcamento_referencia:,.2f}")
+        st.metric("💰 Total Investido", format_currency_br(total_gasto))
+        st.metric("�� Orçamento Total", format_currency_br(orcamento_referencia))
     
     with col2:
         st.metric("📈 % Executado", f"{percentual:.1f}%")
         restante = orcamento_referencia - total_gasto
-        st.metric("💵 Saldo Restante", f"R\$ {restante:,.2f}")
+        st.metric("�� Saldo Restante", format_currency_br(restante))
     
     with col3:
         # Buscar estatísticas adicionais
-        conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
+        conn, db_type = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute("SELECT COUNT(*) FROM lancamentos")
@@ -73,13 +80,13 @@ def _show_resumo_executivo(obra_config):
     st.markdown("### 🥧 Distribuição de Gastos por Categoria")
     
     if not gastos_categoria.empty:
-        # Filtrar apenas categorias com gastos
+        # Filtrar apenas categorias com gastos (coluna 'gasto' em vez de 'total' agora)
         df_gastos = gastos_categoria[gastos_categoria['gasto'] > 0].copy()
         
         if not df_gastos.empty:
             fig = px.pie(
                 df_gastos,
-                values='gasto',
+                values='gasto', # Coluna 'gasto'
                 names='nome',
                 title="Distribuição dos Gastos",
                 template="plotly_dark"
@@ -92,7 +99,7 @@ def _show_resumo_executivo(obra_config):
     # Top 5 maiores gastos
     st.markdown("### 🔝 Top 5 Maiores Gastos")
     
-    conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
+    conn, db_type = get_db_connection()
     top_gastos = pd.read_sql_query("""
         SELECT 
             l.descricao,
@@ -114,10 +121,10 @@ def _show_resumo_executivo(obra_config):
                 st.write(f"**{gasto['descricao']}**")
             
             with col2:
-                st.write(f"��️ {gasto['categoria']}")
+                st.write(f"🏷️ {gasto['categoria']}")
             
             with col3:
-                st.write(f"**💰 R\$ {gasto['valor']:,.2f}**")
+                st.write(f"**💰 {format_currency_br(gasto['valor'])}**") # Usando format_currency_br
                 st.caption(f"📅 {format_date_br(gasto['data'])}")
 
 def _show_relatorio_detalhado():
@@ -131,11 +138,11 @@ def _show_relatorio_detalhado():
         data_inicio = st.date_input("📅 Data Início", value=date.today() - timedelta(days=30))
     
     with col2:
-        data_fim = st.date_input("�� Data Fim", value=date.today())
+        data_fim = st.date_input("📅 Data Fim", value=date.today())
     
     with col3:
         # Buscar categorias
-        conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
+        conn, db_type = get_db_connection()
         categorias = pd.read_sql_query("SELECT nome FROM categorias WHERE ativo = 1", conn)
         categoria_filtro = st.selectbox(
             "🏷️ Categoria",
@@ -144,7 +151,7 @@ def _show_relatorio_detalhado():
         conn.close()
     
     # Buscar dados filtrados
-    conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
+    conn, db_type = get_db_connection()
     
     query = """
         SELECT 
@@ -169,9 +176,12 @@ def _show_relatorio_detalhado():
     
     query += " ORDER BY l.data DESC"
     
-    # Para SQLite, os parâmetros são passados como tupla. Para psycopg2, podem ser lista ou tupla.
-    # Usando tupla para compatibilidade.
-    df_lancamentos = pd.read_sql_query(query, conn, params=tuple(params))
+    # Ajustar placeholders para PostgreSQL se necessário
+    if db_type == 'postgresql':
+        query = query.replace('?', '%s')
+        df_lancamentos = pd.read_sql_query(query, conn, params=tuple(params))
+    else: # sqlite
+        df_lancamentos = pd.read_sql_query(query, conn, params=params)
     conn.close()
     
     if df_lancamentos.empty:
@@ -184,9 +194,9 @@ def _show_relatorio_detalhado():
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("💰 Total do Período", f"R\$ {total_periodo:,.2f}")
+        st.metric("�� Total do Período", format_currency_br(total_periodo)) # Usando format_currency_br
     with col2:
-        st.metric("📊 Média Diária", f"R\$ {media_diaria:,.2f}")
+        st.metric("📊 Média Diária", format_currency_br(media_diaria)) # Usando format_currency_br
     with col3:
         st.metric("📝 Lançamentos", len(df_lancamentos))
     
@@ -196,7 +206,7 @@ def _show_relatorio_detalhado():
     # Preparar dados para exibição
     df_display = df_lancamentos.copy()
     df_display['data'] = df_display['data'].apply(format_date_br)
-    df_display['valor'] = df_display['valor'].apply(lambda x: f"R\$ {x:,.2f}")
+    df_display['valor'] = df_display['valor'].apply(format_currency_br) # Usando format_currency_br
     
     # Limitar descrição
     df_display['descricao'] = df_display['descricao'].apply(
@@ -215,7 +225,7 @@ def _show_analises_avancadas():
     st.subheader("📊 Análises Avançadas")
     
     # Buscar dados
-    conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
+    conn, db_type = get_db_connection()
     
     # Análise por dia da semana
     # Ajuste para compatibilidade de strftime entre SQLite e PostgreSQL
@@ -288,7 +298,7 @@ def _show_analises_avancadas():
     
     with col1:
         if not df_dias.empty:
-            st.markdown("#### 📅 Gastos por Dia da Semana")
+            st.markdown("#### �� Gastos por Dia da Semana")
             fig = px.bar(
                 df_dias,
                 x='dia_semana',
@@ -300,7 +310,7 @@ def _show_analises_avancadas():
     
     with col2:
         if not df_mensal.empty:
-            st.markdown("#### 📈 Evolução Mensal")
+            st.markdown("#### �� Evolução Mensal")
             fig = px.line(
                 df_mensal,
                 x='mes',
@@ -319,8 +329,8 @@ def _show_analises_avancadas():
         df_mensal_display['mes'] = df_mensal_display['mes'].apply(
             lambda x: datetime.strptime(x, '%Y-%m').strftime('%B/%Y')
         )
-        df_mensal_display['total'] = df_mensal_display['total'].apply(lambda x: f"R\$ {x:,.2f}")
-        df_mensal_display['media'] = df_mensal_display['media'].apply(lambda x: f"R\$ {x:,.2f}")
+        df_mensal_display['total'] = df_mensal_display['total'].apply(format_currency_br) # Usando format_currency_br
+        df_mensal_display['media'] = df_mensal_display['media'].apply(format_currency_br) # Usando format_currency_br
         
         df_mensal_display.columns = ['Mês', 'Qtd Lançamentos', 'Total Gasto', 'Média por Lançamento']
         
@@ -335,7 +345,7 @@ def _show_geracao_pdf(user, obra_config):
     
     with col1:
         tipo_relatorio = st.selectbox(
-            "📋 Tipo de Relatório",
+            "�� Tipo de Relatório",
             ["Resumo Executivo", "Detalhado por Período", "Análise por Categoria"]
         )
     

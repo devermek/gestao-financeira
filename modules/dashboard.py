@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date, timedelta
-from config.database import get_db_connection # Manter, pois o resumo executivo usa
-from utils.helpers import get_obra_config, format_currency_br, format_date_br, get_dados_dashboard # Importações centralizadas
+from config.database import get_db_connection
+from utils.helpers import get_obra_config, format_currency_br, format_date_br, get_dados_dashboard
 
 def show_dashboard(user, obra_config):
     """Exibe o dashboard principal da aplicação"""
@@ -16,10 +16,18 @@ def show_dashboard(user, obra_config):
         return
 
     # Obter dados do dashboard da função centralizada em helpers
-    total_gasto, total_previsto_categorias, gastos_categoria, evolucao_mensal, ultimos_lancamentos = get_dados_dashboard()
+    # AGORA RETORNA UM DICIONÁRIO, NÃO UMA TUPLA PARA DESCOMPACTAR
+    dados = get_dados_dashboard()
+
+    # Extrair os dados do dicionário
+    total_gasto = dados['total_gasto']
+    total_previsto_categorias = dados['total_previsto_categorias']
+    gastos_categoria = dados['gastos_categoria']
+    gastos_mensais = dados['gastos_mensais'] # Nome atualizado para corresponder à chave do dicionário
+    lancamentos_recentes = dados['lancamentos_recentes'] # Nome atualizado para corresponder à chave do dicionário
 
     if total_gasto == 0:
-        st.info("📊 Ainda não há dados para gerar o dashboard. Adicione alguns lançamentos primeiro.")
+        st.info("�� Ainda não há dados para gerar o dashboard. Adicione alguns lançamentos primeiro.")
         return
 
     # Métricas principais
@@ -45,14 +53,14 @@ def show_dashboard(user, obra_config):
         cursor = conn.cursor()
         
         cursor.execute("SELECT COUNT(*) FROM lancamentos")
-        total_lancamentos_count = cursor.fetchone()[0] # Evitar conflito de nome com ultimos_lancamentos
+        total_lancamentos_count = cursor.fetchone()[0]
         
         cursor.execute("SELECT COUNT(DISTINCT categoria_id) FROM lancamentos")
         categorias_usadas_count = cursor.fetchone()[0]
         
         conn.close()
         
-        st.metric("📝 Total de Lançamentos", total_lancamentos_count)
+        st.metric("�� Total de Lançamentos", total_lancamentos_count)
         st.metric("🏷️ Categorias Utilizadas", categorias_usadas_count)
 
 
@@ -85,9 +93,9 @@ def show_dashboard(user, obra_config):
     st.markdown("---")
     # Gráfico de linha - Evolução Mensal de Gastos
     st.markdown("### 📈 Evolução Mensal de Gastos")
-    if not evolucao_mensal.empty:
+    if not gastos_mensais.empty: # Variável atualizada
         fig_line = px.line(
-            evolucoes_mensal, # Use a variável já processada
+            gastos_mensais, # Variável atualizada
             x='mes',
             y='total',
             title="Gastos por Mês",
@@ -101,9 +109,9 @@ def show_dashboard(user, obra_config):
     st.markdown("---")
     # Últimos lançamentos em tempo real
     st.markdown("### 📝 Últimos Lançamentos")
-    if not ultimos_lancamentos.empty:
+    if not lancamentos_recentes.empty: # Variável atualizada
         # Preparar dados para exibição
-        df_display = ultimos_lancamentos.copy()
+        df_display = lancamentos_recentes.copy() # Variável atualizada
         df_display['data'] = df_display['data'].apply(format_date_br)
         df_display['valor'] = df_display['valor'].apply(format_currency_br)
         
