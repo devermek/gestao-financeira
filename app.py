@@ -2,15 +2,23 @@ import streamlit as st
 import sys
 import os
 
-# Adicionar src ao path
-sys.path.append(os.path.dirname(__file__))
+# Adicionar src ao path (ajustado para ser mais robusto, considerando que app.py está na raiz)
+# Se 'gestao-obras' é o diretório raiz e app.py está lá, este append garantirá que
+# módulos em 'modules' e 'utils' sejam encontrados.
+# Caso a estrutura seja: C:\gestao-obras\src\app.py, então o ajuste seria outro.
+# Assumindo a estrutura padrão do seu resumo: C:\gestao-obras\app.py
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.append(project_root)
 
+# Importações dos módulos da aplicação
 from modules.auth import show_login_page, show_user_header, is_authenticated, get_current_user
 from modules.dashboard import show_dashboard
 from modules.lancamentos import show_lancamentos
 from modules.relatorios import show_relatorios
 from modules.configuracoes import show_configuracoes
 from utils.helpers import get_obra_config
+from utils.styles import load_css # <-- Nova importação para os estilos
 
 # Configuração da página
 st.set_page_config(
@@ -20,25 +28,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CSS personalizado
-st.markdown("""
-<style>
-    .main-header {
-        background: linear-gradient(90deg, #1f4e79, #2e86de);
-        padding: 1rem;
-        border-radius: 10px;
-        margin-bottom: 2rem;
-        color: white;
-    }
-    .metric-card {
-        background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border-left: 4px solid #2e86de;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Carregar CSS personalizado a partir de utils/styles.py
+load_css() # <-- Chamada da função para aplicar os estilos globais
 
 # Verificar autenticação
 if not is_authenticated():
@@ -85,7 +76,7 @@ else:
     if obra_config and obra_config.get('nome_obra'):
         st.sidebar.info(f"**{obra_config['nome_obra']}**")
         orcamento = obra_config.get('orcamento_total', 0)
-        st.sidebar.metric("💰 Orçamento", f"R$ {orcamento:,.2f}")
+        st.sidebar.metric("💰 Orçamento", f"R\$ {orcamento:,.2f}")
     else:
         st.sidebar.warning("Configure a obra primeiro")
     
@@ -98,7 +89,8 @@ else:
         elif page_key == "lancamentos":
             show_lancamentos(user)
         elif page_key == "relatorios":
-            show_relatorios(user, obra_config)
+            # relatorios.py recebe user e obra_config, conforme sua análise
+            show_relatorios(user, obra_config) 
         elif page_key == "configuracoes":
             show_configuracoes(user, obra_config)
     except Exception as e:

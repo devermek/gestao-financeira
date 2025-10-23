@@ -1,208 +1,122 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
-from config.database import get_db_connection
+from datetime import date, timedelta
+from config.database import get_db_connection # Manter, pois o resumo executivo usa
+from utils.helpers import get_obra_config, format_currency_br, format_date_br, get_dados_dashboard # Importações centralizadas
 
 def show_dashboard(user, obra_config):
-    """Exibe o dashboard principal"""
-    st.title("📊 Dashboard - Visão Geral da Obra")
-    
-    # Verificar se obra_config é válido
-    if not obra_config or not obra_config.get('nome_obra'):
-        st.warning("⚠️ Configure a obra primeiro para visualizar o dashboard completo")
-        obra_config = {
-            'nome_obra': 'Obra Não Configurada',
-            'orcamento_total': 0.0
-        }
-    
-    # Buscar dados
-    dados = get_dados_dashboard_local()
-    
-    # Header com informações da obra
-    st.markdown(f"### 🏗️ {obra_config['nome_obra']}")
-    
+    """Exibe o dashboard principal da aplicação"""
+    st.header("📊 Dashboard Principal")
+
+    # Verifica se a configuração da obra existe
+    if not obra_config or obra_config.get('nome_obra') is None:
+        st.warning("⚠️ Por favor, configure os dados da obra na seção 'Configurações' para ter um dashboard completo.")
+        # Podemos retornar ou mostrar um dashboard mais simples
+        return
+
+    # Obter dados do dashboard da função centralizada em helpers
+    total_gasto, total_previsto_categorias, gastos_categoria, evolucao_mensal, ultimos_lancamentos = get_dados_dashboard()
+
+    if total_gasto == 0:
+        st.info("📊 Ainda não há dados para gerar o dashboard. Adicione alguns lançamentos primeiro.")
+        return
+
     # Métricas principais
-    col1, col2, col3, col4 = st.columns(4)
-    
+    orcamento_obra = obra_config['orcamento_total']
+    # Se o orçamento da obra for 0, usa o total previsto das categorias para o percentual
+    orcamento_referencia = orcamento_obra if orcamento_obra > 0 else total_previsto_categorias
+    percentual_executado = (total_gasto / orcamento_referencia * 100) if orcamento_referencia > 0 else 0
+
+    col1, col2, col3 = st.columns(3)
+
     with col1:
-        st.metric(
-            "💰 Total Gasto",
-            format_currency_local(dados['total_gasto']),
-            delta=None
-        )
-    
+        st.metric("💰 Total Investido", format_currency_br(total_gasto))
+        st.metric("📊 Orçamento Total", format_currency_br(orcamento_referencia))
+
     with col2:
-        orcamento = obra_config.get('orcamento_total', 0)
-        st.metric(
-            "🎯 Orçamento Total",
-            format_currency_local(orcamento),
-            delta=None
-        )
+        st.metric("📈 % Executado", f"{percentual_executado:.1f}%")
+        saldo_restante = orcamento_referencia - total_gasto
+        st.metric("💵 Saldo Restante", format_currency_br(saldo_restante))
     
     with col3:
-        if orcamento > 0:
-            percentual = (dados['total_gasto'] / orcamento) * 100
-            st.metric(
-                "📈 % Executado",
-                f"{percentual:.1f}%",
-                delta=None
-            )
-        else:
-            st.metric("📈 % Executado", "0%", delta=None)
-    
-    with col4:
-        saldo = orcamento - dados['total_gasto']
-        st.metric(
-            "💳 Saldo Restante",
-            format_currency_local(saldo),
-            delta=None
-        )
-    
-    # Gráficos
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("�� Gastos por Categoria")
-        if not dados['gastos_categoria'].empty:
-            fig_pie = px.pie(
-                dados['gastos_categoria'],
-                values='total',
-                names='nome',
-                title="Distribuição de Gastos"
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
-        else:
-            st.info("Nenhum dado de categoria disponível")
-    
-    with col2:
-        st.subheader("📈 Evolução Mensal")
-        if not dados['gastos_mensais'].empty:
-            fig_line = px.line(
-                dados['gastos_mensais'],
-                x='mes',
-                y='total',
-                title="Gastos por Mês"
-            )
-            st.plotly_chart(fig_line, use_container_width=True)
-        else:
-            st.info("Nenhum dado mensal disponível")
-    
-    # Lançamentos recentes
-    st.subheader("📋 Últimos Lançamentos")
-    if not dados['lancamentos_recentes'].empty:
-        # Formatar dados para exibição
-        df_display = dados['lancamentos_recentes'].copy()
-        df_display['data'] = pd.to_datetime(df_display['data']).dt.strftime('%d/%m/%Y')
-        df_display['valor'] = df_display['valor'].apply(lambda x: format_currency_local(x))
+        # Buscar estatísticas adicionais (similar ao relatorios.py, mas aqui para o dashboard)
+        conn, db_type = get_db_connection()
+        cursor = conn.cursor()
         
-        st.dataframe(
-            df_display[['data', 'categoria', 'descricao', 'valor']],
-            column_config={
-                'data': 'Data',
-                'categoria': 'Categoria',
-                'descricao': 'Descrição',
-                'valor': 'Valor'
-            },
-            use_container_width=True
+        cursor.execute("SELECT COUNT(*) FROM lancamentos")
+        total_lancamentos_count = cursor.fetchone()[0] # Evitar conflito de nome com ultimos_lancamentos
+        
+        cursor.execute("SELECT COUNT(DISTINCT categoria_id) FROM lancamentos")
+        categorias_usadas_count = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        st.metric("📝 Total de Lançamentos", total_lancamentos_count)
+        st.metric("🏷️ Categorias Utilizadas", categorias_usadas_count)
+
+
+    # Alertas automáticos
+    st.markdown("---")
+    if percentual_executado >= 90 and saldo_restante <= 0:
+        st.error(f"🚨 ATENÇÃO: Orçamento estourado! {percentual_executado:.1f}% executado. Saldo: {format_currency_br(saldo_restante)}")
+    elif percentual_executado >= 80:
+        st.warning(f"⚠️ Alerta: {percentual_executado:.1f}% do orçamento executado. Saldo restante: {format_currency_br(saldo_restante)}")
+    elif percentual_executado >= 100:
+        st.success(f"✅ Orçamento totalmente executado! {percentual_executado:.1f}% executado.")
+
+    st.markdown("---")
+    # Gráfico de pizza - Distribuição por categoria
+    st.markdown("### 🥧 Distribuição de Gastos por Categoria")
+    if not gastos_categoria.empty and not gastos_categoria[gastos_categoria['gasto'] > 0].empty:
+        df_gastos_pie = gastos_categoria[gastos_categoria['gasto'] > 0].copy()
+        fig_pie = px.pie(
+            df_gastos_pie,
+            values='gasto',
+            names='nome',
+            title="Distribuição dos Gastos",
+            template="plotly_dark"
         )
+        fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig_pie, use_container_width=True)
     else:
-        st.info("📝 Nenhum lançamento encontrado")
+        st.info("Nenhum gasto registrado em categorias para exibir o gráfico.")
 
-def get_dados_dashboard_local():
-    """Retorna dados para o dashboard (função local)"""
-    try:
-        conn = get_db_connection()
-        
-        # Total gasto
-        total_gasto = pd.read_sql_query("""
-            SELECT COALESCE(SUM(valor), 0) as total
-            FROM lancamentos
-        """, conn)
-        
-        # Gastos por categoria
-        gastos_categoria = pd.read_sql_query("""
-            SELECT c.nome, COALESCE(SUM(l.valor), 0) as total
-            FROM categorias c
-            LEFT JOIN lancamentos l ON c.id = l.categoria_id
-            WHERE c.ativo = 1
-            GROUP BY c.id, c.nome
-            HAVING SUM(l.valor) > 0
-            ORDER BY total DESC
-        """, conn)
-        
-        # Lançamentos recentes
-        lancamentos_recentes = pd.read_sql_query("""
-            SELECT l.data, l.descricao, l.valor, c.nome as categoria
-            FROM lancamentos l
-            JOIN categorias c ON l.categoria_id = c.id
-            ORDER BY l.data DESC, l.id DESC
-            LIMIT 10
-        """, conn)
-        
-        # Gastos por mês
-        gastos_mensais = pd.read_sql_query("""
-            SELECT 
-                strftime('%Y-%m', data) as mes,
-                SUM(valor) as total
-            FROM lancamentos
-            GROUP BY strftime('%Y-%m', data)
-            ORDER BY mes
-        """, conn)
-        
-        conn.close()
-        
-        return {
-            'total_gasto': total_gasto.iloc[0]['total'] if not total_gasto.empty else 0,
-            'gastos_categoria': gastos_categoria,
-            'lancamentos_recentes': lancamentos_recentes,
-            'gastos_mensais': gastos_mensais
-        }
-        
-    except Exception as e:
-        print(f"Erro ao buscar dados do dashboard: {e}")
-        return {
-            'total_gasto': 0,
-            'gastos_categoria': pd.DataFrame(),
-            'lancamentos_recentes': pd.DataFrame(),
-            'gastos_mensais': pd.DataFrame()
-        }
+    st.markdown("---")
+    # Gráfico de linha - Evolução Mensal de Gastos
+    st.markdown("### 📈 Evolução Mensal de Gastos")
+    if not evolucao_mensal.empty:
+        fig_line = px.line(
+            evolucoes_mensal, # Use a variável já processada
+            x='mes',
+            y='total',
+            title="Gastos por Mês",
+            markers=True,
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
+    else:
+        st.info("Nenhum dado de evolução mensal para exibir o gráfico.")
 
-def format_currency_local(value):
-    """Formata valor como moeda brasileira (função local)"""
-    if value is None:
-        value = 0
-    return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    st.markdown("---")
+    # Últimos lançamentos em tempo real
+    st.markdown("### 📝 Últimos Lançamentos")
+    if not ultimos_lancamentos.empty:
+        # Preparar dados para exibição
+        df_display = ultimos_lancamentos.copy()
+        df_display['data'] = df_display['data'].apply(format_date_br)
+        df_display['valor'] = df_display['valor'].apply(format_currency_br)
+        
+        # Limitar descrição
+        df_display['descricao'] = df_display['descricao'].apply(
+            lambda x: x[:50] + "..." if len(x) > 50 else x
+        )
+        
+        # Selecionar colunas para exibição
+        colunas_exibir = ['data', 'categoria', 'descricao', 'valor']
+        df_display = df_display[colunas_exibir]
+        df_display.columns = ['Data', 'Categoria', 'Descrição', 'Valor']
 
-def get_estatisticas_resumo():
-    """Retorna estatísticas resumidas"""
-    try:
-        conn = get_db_connection()
-        
-        stats = pd.read_sql_query("""
-            SELECT 
-                COUNT(*) as total_lancamentos,
-                COALESCE(SUM(valor), 0) as total_gasto,
-                COALESCE(AVG(valor), 0) as media_lancamento
-            FROM lancamentos
-        """, conn)
-        
-        conn.close()
-        
-        if not stats.empty:
-            return stats.iloc[0].to_dict()
-        else:
-            return {
-                'total_lancamentos': 0,
-                'total_gasto': 0,
-                'media_lancamento': 0
-            }
-            
-    except Exception as e:
-        print(f"Erro ao buscar estatísticas: {e}")
-        return {
-            'total_lancamentos': 0,
-            'total_gasto': 0,
-            'media_lancamento': 0
-        }
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhum lançamento recente para exibir.")

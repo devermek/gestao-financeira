@@ -38,31 +38,6 @@ def load_css():
             font-weight: 600;
         }
         
-        /* Estilos do cabeçalho principal da aplicação (transferido de app.py) */
-        .main-header {
-            background: linear-gradient(90deg, #1f4e79, #2e86de);
-            padding: 1rem;
-            border-radius: 10px;
-            margin-bottom: 2rem;
-            color: white;
-        }
-
-        /* Card de métrica inicial (transferido de app.py) */
-        .metric-card {
-            background: white;
-            padding: 1rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border-left: 4px solid #2e86de;
-            color: #000000; /* Garante que o texto seja legível no fundo branco */
-        }
-        .metric-card h3 {
-            color: #000000 !important;
-        }
-        .metric-card p {
-            color: #333333 !important;
-        }
-        
         /* Container de Login */
         .login-container {
             max-width: 600px;
@@ -241,7 +216,7 @@ def load_css():
         }
         
         /* Form submit button */
-        .stForm .stButton > button[kind="primary"] { /* Adicionado [kind="primary"] para ser mais específico */
+        .stForm .stButton > button {
             background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
             color: white !important;
             font-weight: bold;
@@ -252,7 +227,7 @@ def load_css():
             box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
         }
         
-        .stForm .stButton > button[kind="primary"]:hover {
+        .stForm .stButton > button:hover {
             background: linear-gradient(135deg, #45a049 0%, #4CAF50 100%) !important;
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
@@ -285,42 +260,27 @@ def load_css():
             margin: 1rem 0;
         }
         
-        /* Inputs customizados - Modo noturno (transferido de lancamentos.py) */
-        .stTextInput > div > div > input,
-        .stNumberInput > div > div > input,
-        .stTextArea > div > div > textarea,
-        .stSelectbox > div > div > select,
-        .stDateInput > div > div > input {
-            background-color: #3498db !important; /* Cor mais clara para contraste com o tema escuro geral */
-            border: 2px solid #5dade2 !important;
-            color: #ffffff !important;
-            border-radius: 8px !important;
-            padding: 0.75rem !important;
-            font-size: 1rem !important;
-            font-weight: 500 !important;
-            transition: all 0.3s ease !important;
+        /* Inputs customizados - Modo noturno */
+        .stTextInput > div > div > input {
+            border-radius: 8px;
+            border: 2px solid #2c3e50;
+            background-color: #1a1a2e !important;
+            color: white !important;
+            font-family: 'Inter', sans-serif;
         }
         
-        .stTextInput > div > div > input:focus,
-        .stNumberInput > div > div > input:focus,
-        .stTextArea > div > div > textarea:focus,
-        .stSelectbox > div > div > select:focus,
-        .stDateInput > div > div > input:focus {
-            background-color: #5dade2 !important;
-            border-color: #85c1e9 !important;
-            box-shadow: 0 0 0 3px rgba(133, 193, 233, 0.4) !important;
-            outline: none !important;
+        .stTextInput > div > div > input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.25);
         }
         
-        /* Remover setas de spin do number input (transferido de lancamentos.py) */
-        .stNumberInput input::-webkit-outer-spin-button,
-        .stNumberInput input::-webkit-inner-spin-button {
-            -webkit-appearance: none !important;
-            margin: 0 !important;
-        }
-        
-        .stNumberInput input[type=number] {
-            -moz-appearance: textfield !important;
+        /* Selectbox customizado - Modo noturno */
+        .stSelectbox > div > div > select {
+            border-radius: 8px;
+            border: 2px solid #2c3e50;
+            background-color: #1a1a2e !important;
+            color: white !important;
+            font-family: 'Inter', sans-serif;
         }
         
         /* Footer customizado - Modo noturno */

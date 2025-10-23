@@ -11,7 +11,7 @@ def show_lancamentos(user):
     st.header("📊 Gestão de Lançamentos Financeiros")
     
     # Tabs para organizar
-    tab1, tab2, tab3 = st.tabs(["➕ Novo Lançamento", "📜 Histórico", "🔍 Detalhes"])
+    tab1, tab2, tab3 = st.tabs(["➕ Novo Lançamento", "�� Histórico", "🔍 Detalhes"])
     
     with tab1:
         _show_novo_lancamento(user)
@@ -26,7 +26,7 @@ def _show_novo_lancamento(user):
     """Formulário para novo lançamento"""
     st.subheader("➕ Adicionar Novo Lançamento")
     
-    # CSS customizado para os campos e botões (apenas uma vez)
+    # CSS customizado para os campos e botões (garante que está presente)
     st.markdown("""
     <style>
         .stTextInput > div > div > input,
@@ -97,9 +97,12 @@ def _show_novo_lancamento(user):
     </style>
     """, unsafe_allow_html=True)
     
-    # Obtenção das categorias
-    categorias = get_categorias_ativas()
+    # Obtenção e FILTRAGEM das categorias
+    categorias_raw = get_categorias_ativas()
     
+    # Garante que apenas categorias com nome (não vazio) e ID válido (não None) sejam consideradas
+    categorias = [cat for cat in categorias_raw if cat and cat.get('nome') and cat.get('id') is not None]
+
     if not categorias:
         st.error("❌ **Nenhuma categoria ativa encontrada!** Para adicionar um lançamento, você precisa primeiro criar categorias.")
         st.info("Por favor, vá para a página de **⚙️ Configurações** e adicione novas categorias.")
@@ -107,6 +110,11 @@ def _show_novo_lancamento(user):
     
     categoria_opcoes = {cat['nome']: cat['id'] for cat in categorias}
     
+    # Adicionalmente, verifica se o dicionário resultante não está vazio.
+    if not categoria_opcoes:
+        st.error("❌ Nenhuma categoria válida foi processada para seleção. Verifique as categorias ativas e suas propriedades (nome, ID).")
+        return
+        
     with st.form("novo_lancamento", clear_on_submit=True):
         st.markdown("### 📝 Dados do Lançamento")
         
@@ -121,11 +129,11 @@ def _show_novo_lancamento(user):
             )
             
             # Categoria
-            default_index = 0 # Sempre selecionar a primeira se houver opções
+            # default_index será 0, pois já verificamos que categoria_opcoes não está vazia
             categoria_selecionada = st.selectbox(
                 "🏷️ Categoria do Gasto", 
                 options=list(categoria_opcoes.keys()),
-                index=default_index,
+                index=0, 
                 placeholder="Escolha uma categoria..."
             )
         
@@ -154,7 +162,7 @@ def _show_novo_lancamento(user):
         
         # Upload
         uploaded_files = st.file_uploader(
-            "�� Comprovantes (Opcional)",
+            "📁 Comprovantes (Opcional)",
             type=['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
             accept_multiple_files=True
         )
@@ -170,17 +178,18 @@ def _show_novo_lancamento(user):
         if submitted:
             # Validação
             erros = []
-            categoria_id = None # Inicializa categoria_id como None
+            categoria_id = None 
             
             if not categoria_selecionada:
                 erros.append("⚠️ Selecione uma categoria")
             else:
+                # Com a filtragem de categorias, o ID deve ser válido aqui
                 categoria_id = categoria_opcoes.get(categoria_selecionada)
                 if categoria_id is None:
-                    erros.append("⚠️ Categoria selecionada inválida ou não encontrada na base de dados.")
-            
+                    erros.append(f"⚠️ A categoria '{categoria_selecionada}' foi selecionada, mas seu ID não pôde ser recuperado. (Verifique o banco de dados e a função 'get_categorias_ativas').")
+
             if not valor or valor <= 0:
-                erros.append("💰 Digite um valor maior que R$ 0,00")
+                erros.append("�� Digite um valor maior que R$ 0,00")
             
             if not descricao or not descricao.strip():
                 erros.append("📝 Digite uma descrição")
@@ -248,16 +257,18 @@ def _show_novo_lancamento(user):
         
 def _show_historico_lancamentos(user):
     """Exibe histórico de lançamentos com visualização melhorada de comprovantes"""
-    st.subheader("�� Histórico de Lançamentos")
+    st.subheader("📜 Histórico de Lançamentos")
     
     # Filtros em linha
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
     
     with col1:
-        categorias = get_categorias_ativas()
+        categorias_raw = get_categorias_ativas()
+        # Filtrar categorias para o histórico também, para evitar problemas na lista de opções
+        categorias_filtradas = [cat for cat in categorias_raw if cat and cat.get('nome') and cat.get('id') is not None]
         categoria_filtro = st.selectbox(
             "🏷️ Categoria", 
-            options=["Todas"] + [cat['nome'] for cat in categorias],
+            options=["Todas"] + [cat['nome'] for cat in categorias_filtradas],
             index=0
         )
     
@@ -289,7 +300,7 @@ def _show_historico_lancamentos(user):
     st.markdown("---")
     
     # NOVA VISUALIZAÇÃO: Cards com comprovantes
-    st.markdown("### �� Lançamentos com Comprovantes")
+    st.markdown("### 📄 Lançamentos com Comprovantes")
     
     for _, lancamento in lancamentos.iterrows():
         # Verificar se tem arquivos anexados
@@ -312,7 +323,7 @@ def _show_historico_lancamentos(user):
             
             with col_header3:
                 st.markdown(f"**💰 R$ {format_currency_br(lancamento['valor'])}**")
-                st.caption(f"👤 {lancamento['usuario']}")
+                st.caption(f"�� {lancamento['usuario']}")
             
             with col_header4:
                 if tem_arquivos:
@@ -323,16 +334,16 @@ def _show_historico_lancamentos(user):
                     if 'images' in tipos_arquivo:
                         icons.append("🖼️")
                     if 'documents' in tipos_arquivo:
-                        icons.append("��")
+                        icons.append("📄")
                     if 'spreadsheets' in tipos_arquivo:
                         icons.append("📊")
                     st.markdown(" ".join(icons))
                 else:
-                    st.markdown("�� Sem anexos")
+                    st.markdown("🔗 Sem anexos")
             
             # SEÇÃO DE COMPROVANTES (expansível)
             if tem_arquivos:
-                with st.expander(f"�� Ver {len(arquivos)} Comprovante(s) - Lançamento #{lancamento['id']}", expanded=False):
+                with st.expander(f"📁 Ver {len(arquivos)} Comprovante(s) - Lançamento #{lancamento['id']}", expanded=False):
                     _show_comprovantes_inline(lancamento['id'], user['id'], user['tipo'])
 
 def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
@@ -340,7 +351,7 @@ def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
     arquivos = FileManager.get_files_by_lancamento(lancamento_id)
     
     if not arquivos:
-        st.info("📁 Nenhum arquivo encontrado")
+        st.info("�� Nenhum arquivo encontrado")
         return
     
     # Separar por tipo
@@ -379,7 +390,7 @@ def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
                         
                         with col_btn2:
                             if user_tipo == 'gestor':
-                                if st.button("��️", key=f"del_hist_img_{img[0]}", help="Deletar"):
+                                if st.button("🗑️", key=f"del_hist_img_{img[0]}", help="Deletar"):
                                     success, message = FileManager.delete_file(img[0], user_id)
                                     if success:
                                         st.success(message)
@@ -402,14 +413,14 @@ def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
                 if doc[1].lower().endswith('.pdf'):
                     emoji = "📄"
                 elif doc[1].lower().endswith(('.doc', '.docx')):
-                    emoji = "��"
+                    emoji = "📃"
                 elif doc[1].lower().endswith(('.xls', '.xlsx', '.csv')):
                     emoji = "📊"
                 else:
-                    emoji = "📎"
+                    emoji = "��"
                 
                 st.write(f"{emoji} **{doc[1]}**")
-                st.caption(f"📅 {doc[4]} | 📏 {doc[3]} bytes")
+                st.caption(f"�� {doc[4]} | 📏 {doc[3]} bytes")
             
             with col_doc2:
                 nome, tipo, conteudo = FileManager.get_file_content(doc[0])
@@ -447,7 +458,7 @@ def _show_comprovantes_inline(lancamento_id, user_id, user_tipo):
                             
 def _show_detalhes_lancamento(user):
     """Exibe detalhes de um lançamento específico"""
-    st.subheader("🔍 Buscar Lançamento por ID")
+    st.subheader("�� Buscar Lançamento por ID")
     
     col1, col2 = st.columns([2, 1])
     
@@ -483,8 +494,8 @@ def _show_detalhes_lancamento(user):
             st.markdown(f"""
             <div class="info-card">
                 <h4>📊 Lançamento #{lancamento[0]}</h4>
-                <p><strong>🗓️ Data:</strong> {format_date_br(lancamento[1])}</p>
-                <p><strong>��️ Categoria:</strong> {lancamento[6]}</p>
+                <p><strong>��️ Data:</strong> {format_date_br(lancamento[1])}</p>
+                <p><strong>🏷️ Categoria:</strong> {lancamento[6]}</p>
                 <p><strong>💰 Valor:</strong> R$ {format_currency_br(lancamento[3])}</p>
                 <p><strong>📝 Descrição:</strong> {lancamento[2]}</p>
                 <p><strong>👤 Usuário:</strong> {lancamento[7]}</p>

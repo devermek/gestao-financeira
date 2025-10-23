@@ -56,23 +56,24 @@ class FileManager:
             if len(file_data) > FileManager.MAX_FILE_SIZE:
                 return False, f"Arquivo muito grande. Máximo: {FileManager.MAX_FILE_SIZE // (1024*1024)}MB"
             
-            conn = get_db_connection()
+            conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
             cursor = conn.cursor()
-            
-            # Gerar nome único para o arquivo (opcional se 'nome' no banco for o original)
-            # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            # nome_arquivo_unico = f"{timestamp}_{filename}" 
             
             tipo_arquivo_categoria = FileManager.get_file_type(filename) # 'images', 'documents', 'spreadsheets'
             
-            # Inserir no banco
-            # Corrigido para usar 'nome' e 'tipo' conforme a definição do banco de dados
-            cursor.execute("""
-                INSERT INTO arquivos (lancamento_id, nome, tipo, tamanho, conteudo, usuario_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (lancamento_id, filename, tipo_arquivo_categoria, len(file_data), file_data, user_id))
+            # Inserir no banco com compatibilidade de DB
+            if db_type == 'postgresql':
+                cursor.execute("""
+                    INSERT INTO arquivos (lancamento_id, nome, tipo, tamanho, conteudo, usuario_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (lancamento_id, filename, tipo_arquivo_categoria, len(file_data), file_data, user_id))
+            else: # SQLite
+                cursor.execute("""
+                    INSERT INTO arquivos (lancamento_id, nome, tipo, tamanho, conteudo, usuario_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (lancamento_id, filename, tipo_arquivo_categoria, len(file_data), file_data, user_id))
             
-            arquivo_id = cursor.lastrowid
+            arquivo_id = cursor.lastrowid # lastrowid funciona para SQLite e psycopg2 (se usar RETURNING id)
             conn.commit()
             conn.close()
             
@@ -85,17 +86,26 @@ class FileManager:
     def get_files_by_lancamento(lancamento_id):
         """Busca arquivos de um lançamento"""
         try:
-            conn = get_db_connection()
+            conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
             cursor = conn.cursor()
             
-            # Corrigido para selecionar 'nome' e 'tipo'
-            cursor.execute("""
-                SELECT a.id, a.nome, a.tipo, a.tamanho, a.created_at, u.nome as usuario
-                FROM arquivos a
-                LEFT JOIN usuarios u ON a.usuario_id = u.id
-                WHERE a.lancamento_id = ?
-                ORDER BY a.created_at DESC
-            """, (lancamento_id,))
+            # Buscar arquivos com compatibilidade de DB
+            if db_type == 'postgresql':
+                cursor.execute("""
+                    SELECT a.id, a.nome, a.tipo, a.tamanho, a.created_at, u.nome as usuario
+                    FROM arquivos a
+                    LEFT JOIN usuarios u ON a.usuario_id = u.id
+                    WHERE a.lancamento_id = %s
+                    ORDER BY a.created_at DESC
+                """, (lancamento_id,))
+            else: # SQLite
+                cursor.execute("""
+                    SELECT a.id, a.nome, a.tipo, a.tamanho, a.created_at, u.nome as usuario
+                    FROM arquivos a
+                    LEFT JOIN usuarios u ON a.usuario_id = u.id
+                    WHERE a.lancamento_id = ?
+                    ORDER BY a.created_at DESC
+                """, (lancamento_id,))
             
             files = cursor.fetchall()
             conn.close()
@@ -110,15 +120,22 @@ class FileManager:
     def get_file_content(arquivo_id):
         """Busca conteúdo de um arquivo"""
         try:
-            conn = get_db_connection()
+            conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
             cursor = conn.cursor()
             
-            # Corrigido para selecionar 'nome' e 'tipo'
-            cursor.execute("""
-                SELECT nome, tipo, conteudo
-                FROM arquivos
-                WHERE id = ?
-            """, (arquivo_id,))
+            # Buscar conteúdo com compatibilidade de DB
+            if db_type == 'postgresql':
+                cursor.execute("""
+                    SELECT nome, tipo, conteudo
+                    FROM arquivos
+                    WHERE id = %s
+                """, (arquivo_id,))
+            else: # SQLite
+                cursor.execute("""
+                    SELECT nome, tipo, conteudo
+                    FROM arquivos
+                    WHERE id = ?
+                """, (arquivo_id,))
             
             result = cursor.fetchone()
             conn.close()
@@ -136,19 +153,26 @@ class FileManager:
     def delete_file(arquivo_id, user_id):
         """Deleta um arquivo"""
         try:
-            conn = get_db_connection()
+            conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
             cursor = conn.cursor()
             
-            # Verificar se o arquivo existe e pertence ao usuário (ou é gestor)
-            # Corrigido para selecionar 'nome'
-            cursor.execute("SELECT nome FROM arquivos WHERE id = ?", (arquivo_id,))
+            # Verificar se o arquivo existe (para obter o nome para a mensagem de sucesso)
+            if db_type == 'postgresql':
+                cursor.execute("SELECT nome FROM arquivos WHERE id = %s", (arquivo_id,))
+            else: # SQLite
+                cursor.execute("SELECT nome FROM arquivos WHERE id = ?", (arquivo_id,))
+            
             arquivo = cursor.fetchone()
             
             if not arquivo:
                 return False, "Arquivo não encontrado"
             
-            # Deletar arquivo
-            cursor.execute("DELETE FROM arquivos WHERE id = ?", (arquivo_id,))
+            # Deletar arquivo com compatibilidade de DB
+            if db_type == 'postgresql':
+                cursor.execute("DELETE FROM arquivos WHERE id = %s", (arquivo_id,))
+            else: # SQLite
+                cursor.execute("DELETE FROM arquivos WHERE id = ?", (arquivo_id,))
+            
             conn.commit()
             conn.close()
             
@@ -176,7 +200,7 @@ def show_file_uploader(lancamento_id, user_id):
             st.info(f"📁 {len(uploaded_files)} arquivo(s) selecionado(s)")
         
         with col2:
-            if st.button("�� Salvar Arquivos", type="primary"):
+            if st.button("💾 Salvar Arquivos", type="primary"):
                 success_count = 0
                 error_count = 0
                 
@@ -231,7 +255,7 @@ def show_file_gallery(lancamento_id, user_id, user_tipo):
     
     # Mostrar imagens
     if images:
-        st.markdown("#### ��️ Imagens")
+        st.markdown("#### 🖼️ Imagens")
         
         # Criar grid de imagens
         cols = st.columns(3)
@@ -260,7 +284,7 @@ def show_file_gallery(lancamento_id, user_id, user_tipo):
                         
                         with col_delete:
                             if user_tipo == 'gestor':
-                                if st.button("🗑️ Deletar", key=f"delete_img_{img_file[0]}"):
+                                if st.button("��️ Deletar", key=f"delete_img_{img_file[0]}"):
                                     success, message = FileManager.delete_file(img_file[0], user_id)
                                     if success:
                                         st.success(message)
@@ -269,7 +293,7 @@ def show_file_gallery(lancamento_id, user_id, user_tipo):
                                         st.error(message)
                         
                         # Info do arquivo
-                        st.caption(f"📅 {img_file[4]} | 👤 {img_file[5]} | 📏 {img_file[3]} bytes")
+                        st.caption(f"📅 {img_file[4]} | 👤 {img_file[5]} | �� {img_file[3]} bytes")
                 
                 except Exception as e:
                     st.error(f"Erro ao exibir imagem: {e}")
@@ -292,7 +316,7 @@ def show_file_gallery(lancamento_id, user_id, user_tipo):
                     emoji = "📊"
                 
                 st.write(f"{emoji} **{doc_file[1]}**")
-                st.caption(f"📅 {doc_file[4]} | 👤 {doc_file[5]} | 📏 {doc_file[3]} bytes")
+                st.caption(f"📅 {doc_file[4]} | �� {doc_file[5]} | 📏 {doc_file[3]} bytes")
             
             with col2:
                 # Buscar conteúdo para download
@@ -310,7 +334,7 @@ def show_file_gallery(lancamento_id, user_id, user_tipo):
                         mime_type = 'application/octet-stream'
                     
                     st.download_button(
-                        "📥 Baixar",
+                        "�� Baixar",
                         data=conteudo,
                         file_name=nome,
                         mime=mime_type,

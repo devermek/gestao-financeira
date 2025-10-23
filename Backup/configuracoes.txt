@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date
-from config.database import get_db_connection
+from config.database import get_db_connection, get_current_db_type # Import get_current_db_type
 from utils.helpers import get_categorias_ativas
 
 def show_configuracoes(user, obra_config):
@@ -28,7 +28,7 @@ def _show_obra_config(obra_config):
         
         with col1:
             nome_obra = st.text_input(
-                "🏠 Nome da Obra",
+                "�� Nome da Obra",
                 value=obra_config['nome_obra'],
                 help="Nome que aparecerá no cabeçalho do sistema"
             )
@@ -44,7 +44,7 @@ def _show_obra_config(obra_config):
         
         with col2:
             data_inicio = st.date_input(
-                "📅 Data de Início",
+                "�� Data de Início",
                 value=obra_config['data_inicio'] if obra_config['data_inicio'] else date.today(),
                 help="Data de início da obra"
             )
@@ -64,7 +64,7 @@ def _show_obra_config(obra_config):
                 
                 # Criar nova configuração
                 try:
-                    conn = get_db_connection()
+                    conn = get_db_connection() # Obter apenas a conexão
                     cursor = conn.cursor()
                     
                     cursor.execute("""
@@ -93,7 +93,7 @@ def _show_obra_config(obra_config):
 def _update_obra_config(nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_id):
     """Atualiza configurações da obra"""
     try:
-        conn = get_db_connection()
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -115,14 +115,17 @@ def _show_categorias_config():
     st.subheader("🏷️ Gestão de Categorias")
     
     # Mostrar categorias existentes
-    categorias = get_categorias_ativas()
+    categorias_raw = get_categorias_ativas()
+    
+    # FILTRO ESSENCIAL: Garantir que apenas categorias com ID válido sejam processadas
+    categorias = [cat for cat in categorias_raw if cat and cat.get('id') is not None]
     
     if categorias:
         st.markdown("### 📋 Categorias Cadastradas")
         
         for categoria in categorias:
-            with st.expander(f"🏷️ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
-                # Chave única para o formulário
+            # A chave do formulário agora está segura, pois categoria['id'] não será None
+            with st.expander(f"��️ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
                 with st.form(key=f"edit_categoria_{categoria['id']}"): 
                     col1, col2 = st.columns(2)
                     
@@ -205,17 +208,15 @@ def _show_categorias_config():
             if nome_nova:
                 success = _create_categoria(nome_nova, descricao_nova, orcamento_nova)
                 if success:
-                    st.success("✅ Nova categoria criada!")
-                    st.rerun()
-                else:
-                    st.error("❌ Erro ao criar categoria!")
+                    st.rerun() # Recarregar para mostrar a nova categoria
+                # Mensagens de sucesso/erro já estão dentro de _create_categoria
             else:
                 st.error("❌ Digite um nome para a categoria!")
 
 def _update_categoria(categoria_id, nome, descricao, orcamento, ativo):
     """Atualiza uma categoria"""
     try:
-        conn = get_db_connection()
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
         
         cursor.execute("""
@@ -235,20 +236,39 @@ def _update_categoria(categoria_id, nome, descricao, orcamento, ativo):
 def _create_categoria(nome, descricao, orcamento):
     """Cria uma nova categoria"""
     try:
-        conn = get_db_connection()
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
+        db_type = get_current_db_type() # Obter o tipo de DB separadamente
         
-        cursor.execute("""
-            INSERT INTO categorias (nome, descricao, orcamento_previsto, ativo)
-            VALUES (?, ?, ?, 1)
-        """, (nome, descricao, orcamento))
+        if db_type == 'postgresql':
+            # Para PostgreSQL, use RETURNING id
+            cursor.execute("""
+                INSERT INTO categorias (nome, descricao, orcamento_previsto, ativo)
+                VALUES (%s, %s, %s, 1) RETURNING id
+            """, (nome, descricao, orcamento))
+            new_id = cursor.fetchone()[0] # Pega o ID retornado
+        else: # SQLite
+            # Para SQLite, use cursor.lastrowid
+            cursor.execute("""
+                INSERT INTO categorias (nome, descricao, orcamento_previsto, ativo)
+                VALUES (?, ?, ?, 1)
+            """, (nome, descricao, orcamento))
+            new_id = cursor.lastrowid
         
         conn.commit()
         conn.close()
-        return True
+        
+        if new_id:
+            st.success(f"✅ Nova categoria '{nome}' criada com sucesso com ID: {new_id}!")
+            return True
+        else:
+            st.error("❌ Erro ao criar categoria: O ID da nova categoria não foi retornado. Verifique a configuração do banco de dados.")
+            return False
         
     except Exception as e:
-        print(f"Erro ao criar categoria: {e}")
+        st.error(f"❌ Erro ao criar categoria: {str(e)}")
+        # import traceback
+        # st.code(traceback.format_exc()) # Descomente para debug mais detalhado
         return False
 
 def _show_sistema_config(user):
@@ -272,7 +292,7 @@ def _show_sistema_config(user):
     st.markdown("### 📊 Estatísticas do Sistema")
     
     try:
-        conn = get_db_connection()
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
         
         # Contar registros
@@ -302,13 +322,13 @@ def _show_sistema_config(user):
             st.metric("💰 Lançamentos", total_lancamentos)
         
         with col4:
-            st.metric("�� Arquivos", total_arquivos)
+            st.metric("📎 Arquivos", total_arquivos)
         
     except Exception as e:
         st.error(f"❌ Erro ao buscar estatísticas: {e}")
     
     # Backup e manutenção
-    st.markdown("### �� Manutenção")
+    st.markdown("### 🔧 Manutenção")
     
     col1, col2 = st.columns(2)
     
@@ -317,20 +337,24 @@ def _show_sistema_config(user):
             _verificar_integridade_banco()
     
     with col2:
-        if st.button("�� Recarregar Sistema", type="secondary"):
+        if st.button("🔄 Recarregar Sistema", type="secondary"):
             st.rerun()
 
 def _verificar_integridade_banco():
     """Verifica integridade do banco de dados"""
     try:
-        conn = get_db_connection()
+        conn = get_db_connection() # Obter apenas a conexão
         cursor = conn.cursor()
+        db_type = get_current_db_type() # Obter o tipo de DB separadamente
         
-        # Verificar tabelas
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tabelas = cursor.fetchall()
-        
-        st.success(f"✅ Banco íntegro! {len(tabelas)} tabelas encontradas.")
+        if db_type == 'sqlite':
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tabelas = cursor.fetchall()
+            st.success(f"✅ Banco SQLite íntegro! {len(tabelas)} tabelas encontradas.")
+        else: # PostgreSQL
+            cursor.execute("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';")
+            tabelas = cursor.fetchall()
+            st.success(f"✅ Banco PostgreSQL íntegro! {len(tabelas)} tabelas encontradas.")
         
         # Verificar dados órfãos
         cursor.execute("""

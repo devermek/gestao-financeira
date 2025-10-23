@@ -1,6 +1,6 @@
 import streamlit as st
-from datetime import date
-from config.database import get_db_connection, get_current_db_type # Import get_current_db_type
+from datetime import date, datetime # Importar datetime para updated_at no SQLite
+from config.database import get_db_connection # Remover get_current_db_type
 from utils.helpers import get_categorias_ativas
 
 def show_configuracoes(user, obra_config):
@@ -28,13 +28,13 @@ def _show_obra_config(obra_config):
         
         with col1:
             nome_obra = st.text_input(
-                "�� Nome da Obra",
+                "🏗️ Nome da Obra",
                 value=obra_config['nome_obra'],
                 help="Nome que aparecerá no cabeçalho do sistema"
             )
             
             orcamento_total = st.number_input(
-                "💰 Orçamento Total (R$)",
+                "💰 Orçamento Total (R\$)",
                 min_value=0.0,
                 value=float(obra_config['orcamento_total']),
                 step=1000.0,
@@ -44,7 +44,7 @@ def _show_obra_config(obra_config):
         
         with col2:
             data_inicio = st.date_input(
-                "�� Data de Início",
+                "🗓️ Data de Início",
                 value=obra_config['data_inicio'] if obra_config['data_inicio'] else date.today(),
                 help="Data de início da obra"
             )
@@ -64,7 +64,7 @@ def _show_obra_config(obra_config):
                 
                 # Criar nova configuração
                 try:
-                    conn = get_db_connection() # Obter apenas a conexão
+                    conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
                     cursor = conn.cursor()
                     
                     cursor.execute("""
@@ -93,14 +93,22 @@ def _show_obra_config(obra_config):
 def _update_obra_config(nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_id):
     """Atualiza configurações da obra"""
     try:
-        conn = get_db_connection() # Obter apenas a conexão
+        conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
         cursor = conn.cursor()
         
-        cursor.execute("""
-            UPDATE obra_config 
-            SET nome_obra = ?, orcamento_total = ?, data_inicio = ?, data_previsao_fim = ?
-            WHERE id = ?
-        """, (nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_id))
+        # Lógica para atualizar updated_at no SQLite, já que não tem triggers automáticos
+        if db_type == 'sqlite':
+            cursor.execute("""
+                UPDATE obra_config 
+                SET nome_obra = ?, orcamento_total = ?, data_inicio = ?, data_previsao_fim = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_id))
+        else: # PostgreSQL
+            cursor.execute("""
+                UPDATE obra_config 
+                SET nome_obra = ?, orcamento_total = ?, data_inicio = ?, data_previsao_fim = ?
+                WHERE id = ?
+            """, (nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_id))
         
         conn.commit()
         conn.close()
@@ -125,7 +133,7 @@ def _show_categorias_config():
         
         for categoria in categorias:
             # A chave do formulário agora está segura, pois categoria['id'] não será None
-            with st.expander(f"��️ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
+            with st.expander(f"✨ {categoria['nome']} - R\$ {categoria['orcamento_previsto']:,.2f}"):
                 with st.form(key=f"edit_categoria_{categoria['id']}"): 
                     col1, col2 = st.columns(2)
                     
@@ -144,7 +152,7 @@ def _show_categorias_config():
                     
                     with col2:
                         novo_orcamento = st.number_input(
-                            "Orçamento Previsto (R$)",
+                            "Orçamento Previsto (R\$)",
                             min_value=0.0,
                             value=float(categoria['orcamento_previsto']),
                             step=100.0,
@@ -161,7 +169,7 @@ def _show_categorias_config():
                     col_save, col_delete = st.columns(2)
                     
                     with col_save:
-                        if st.form_submit_button("💾 Salvar", type="primary"):
+                        if st.form_submit_button("�� Salvar", type="primary"):
                             success = _update_categoria(
                                 categoria['id'], novo_nome, nova_descricao, 
                                 novo_orcamento, 1 if ativa else 0
@@ -198,7 +206,7 @@ def _show_categorias_config():
         
         with col2:
             orcamento_nova = st.number_input(
-                "Orçamento Previsto (R$)",
+                "Orçamento Previsto (R\$)",
                 min_value=0.0,
                 step=100.0,
                 format="%.2f"
@@ -216,14 +224,22 @@ def _show_categorias_config():
 def _update_categoria(categoria_id, nome, descricao, orcamento, ativo):
     """Atualiza uma categoria"""
     try:
-        conn = get_db_connection() # Obter apenas a conexão
+        conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
         cursor = conn.cursor()
         
-        cursor.execute("""
-            UPDATE categorias 
-            SET nome = ?, descricao = ?, orcamento_previsto = ?, ativo = ?
-            WHERE id = ?
-        """, (nome, descricao, orcamento, ativo, categoria_id))
+        # Lógica para atualizar updated_at no SQLite
+        if db_type == 'sqlite':
+            cursor.execute("""
+                UPDATE categorias 
+                SET nome = ?, descricao = ?, orcamento_previsto = ?, ativo = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (nome, descricao, orcamento, ativo, categoria_id))
+        else: # PostgreSQL
+            cursor.execute("""
+                UPDATE categorias 
+                SET nome = ?, descricao = ?, orcamento_previsto = ?, ativo = ?
+                WHERE id = ?
+            """, (nome, descricao, orcamento, ativo, categoria_id))
         
         conn.commit()
         conn.close()
@@ -236,9 +252,8 @@ def _update_categoria(categoria_id, nome, descricao, orcamento, ativo):
 def _create_categoria(nome, descricao, orcamento):
     """Cria uma nova categoria"""
     try:
-        conn = get_db_connection() # Obter apenas a conexão
+        conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
         cursor = conn.cursor()
-        db_type = get_current_db_type() # Obter o tipo de DB separadamente
         
         if db_type == 'postgresql':
             # Para PostgreSQL, use RETURNING id
@@ -267,13 +282,11 @@ def _create_categoria(nome, descricao, orcamento):
         
     except Exception as e:
         st.error(f"❌ Erro ao criar categoria: {str(e)}")
-        # import traceback
-        # st.code(traceback.format_exc()) # Descomente para debug mais detalhado
         return False
 
 def _show_sistema_config(user):
     """Configurações do sistema"""
-    st.subheader("👥 Configurações do Sistema")
+    st.subheader("�� Configurações do Sistema")
     
     # Informações do usuário atual
     st.markdown("### 👤 Usuário Atual")
@@ -292,7 +305,7 @@ def _show_sistema_config(user):
     st.markdown("### 📊 Estatísticas do Sistema")
     
     try:
-        conn = get_db_connection() # Obter apenas a conexão
+        conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
         cursor = conn.cursor()
         
         # Contar registros
@@ -322,7 +335,7 @@ def _show_sistema_config(user):
             st.metric("💰 Lançamentos", total_lancamentos)
         
         with col4:
-            st.metric("📎 Arquivos", total_arquivos)
+            st.metric("�� Arquivos", total_arquivos)
         
     except Exception as e:
         st.error(f"❌ Erro ao buscar estatísticas: {e}")
@@ -343,9 +356,8 @@ def _show_sistema_config(user):
 def _verificar_integridade_banco():
     """Verifica integridade do banco de dados"""
     try:
-        conn = get_db_connection() # Obter apenas a conexão
+        conn, db_type = get_db_connection() # Obter a conexão e o tipo de DB
         cursor = conn.cursor()
-        db_type = get_current_db_type() # Obter o tipo de DB separadamente
         
         if db_type == 'sqlite':
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
