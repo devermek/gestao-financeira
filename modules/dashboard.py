@@ -173,7 +173,7 @@ def format_currency_local(value):
     """Formata valor como moeda brasileira (função local)"""
     if value is None:
         value = 0
-    return f"R\$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
 def get_estatisticas_resumo():
     """Retorna estatísticas resumidas"""
