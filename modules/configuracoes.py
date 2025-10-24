@@ -1,393 +1,415 @@
+import sys
 import streamlit as st
-from datetime import date, datetime # Import datetime
-from config.database import get_db_connection
-from utils.helpers import get_categorias_ativas, format_currency_br # Import format_currency_br
+from datetime import date, datetime
+from config.database import get_connection
+from utils.helpers import get_obra_config, get_categorias_ativas, format_currency_br
 
-def show_configuracoes(user, obra_config):
+def show_configuracoes():
     """Exibe página de configurações"""
-    st.header("⚙️ Configurações do Sistema")
+    st.title("⚙️ Configurações do Sistema")
     
-    tab1, tab2, tab3 = st.tabs(["🏗️ Obra", "🏷️ Categorias", "👥 Sistema"])
+    # Tabs para diferentes configurações
+    tab1, tab2 = st.tabs(["🏗️ Configuração da Obra", "🏷️ Gestão de Categorias"])
     
     with tab1:
-        _show_obra_config(obra_config)
+        _show_obra_config()
     
     with tab2:
         _show_categorias_config()
-    
-    with tab3:
-        _show_sistema_config(user)
 
-def _show_obra_config(obra_config):
+def _show_obra_config():
     """Configurações da obra"""
-    st.subheader("��️ Configurações da Obra")
+    st.subheader("🏗️ Configuração da Obra")
     
-    with st.form("config_obra"):
+    # Carrega configuração atual
+    obra_config = get_obra_config()
+    
+    with st.form("config_obra_form"):
+        st.markdown("### Dados Principais")
+        
         col1, col2 = st.columns(2)
         
         with col1:
             nome_obra = st.text_input(
-                "�� Nome da Obra",
-                value=obra_config['nome_obra'],
-                help="Nome que aparecerá no cabeçalho do sistema"
+                "Nome da Obra",
+                value=obra_config.get('nome', '') if obra_config.get('nome') != 'Obra não configurada' else '',
+                placeholder="Ex: Construção Casa João"
             )
             
-            orcamento_total = st.number_input(
-                "💰 Orçamento Total (R\$)",
+            orcamento = st.number_input(
+                "Orçamento Total (R\$)",
                 min_value=0.0,
-                value=float(obra_config['orcamento_total']), # Ensure float for number_input
+                value=float(obra_config.get('orcamento', 0.0)),
                 step=1000.0,
-                format="%.2f",
-                help="Orçamento total previsto para a obra"
+                format="%.2f"
             )
         
         with col2:
-            # Ensure date object for date_input
-            initial_data_inicio = obra_config['data_inicio'] if obra_config['data_inicio'] else date.today()
-            if isinstance(initial_data_inicio, str):
-                try:
-                    initial_data_inicio = datetime.strptime(initial_data_inicio, '%Y-%m-%d').date()
-                except ValueError:
-                    initial_data_inicio = date.today()
-
-            initial_data_previsao_fim = obra_config['data_previsao_fim']
-            if isinstance(initial_data_previsao_fim, str):
-                try:
-                    initial_data_previsao_fim = datetime.strptime(initial_data_previsao_fim, '%Y-%m-%d').date()
-                except ValueError:
-                    initial_data_previsao_fim = None
-
             data_inicio = st.date_input(
-                "🗓️ Data de Início",
-                value=initial_data_inicio,
-                help="Data de início da obra"
+                "Data de Início",
+                value=obra_config.get('data_inicio') or date.today()
             )
             
-            data_previsao_fim = st.date_input(
-                "🏁 Previsão de Término",
-                value=initial_data_previsao_fim,
-                help="Data prevista para conclusão da obra"
+            data_fim = st.date_input(
+                "Data de Término Prevista",
+                value=obra_config.get('data_fim_prevista') or date.today()
             )
         
-        submitted = st.form_submit_button("💾 Salvar Configurações", type="primary")
+        # Validações
+        if data_fim < data_inicio:
+            st.error("⚠️ A data de término deve ser posterior à data de início!")
+        
+        submitted = st.form_submit_button("💾 Salvar Configurações", use_container_width=True)
         
         if submitted:
-            # The 'ID da obra não encontrado' message from here means obra_config['id'] is None
-            if obra_config['id'] is None:
-                st.info("❌ Erro: ID da obra não encontrado. Criando nova configuração...")
-                try:
-                    success = _create_obra_config(nome_obra, orcamento_total, data_inicio, data_previsao_fim)
-                    if success:
-                        st.success("✅ Nova configuração criada com sucesso!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Erro ao criar configuração!")
-                except Exception as e:
-                    st.error(f"❌ Erro ao criar configuração: {str(e)}")
-                    print(f"Erro ao criar configuração: {e}", file=sys.stderr); sys.stderr.flush()
+            if not nome_obra.strip():
+                st.error("⚠️ O nome da obra é obrigatório!")
+            elif orcamento <= 0:
+                st.error("⚠️ O orçamento deve ser maior que zero!")
+            elif data_fim < data_inicio:
+                st.error("⚠️ A data de término deve ser posterior à data de início!")
             else:
-                success = _update_obra_config(nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_config['id'])
-                if success:
+                if _save_obra_config(nome_obra, orcamento, data_inicio, data_fim):
                     st.success("✅ Configurações salvas com sucesso!")
                     st.rerun()
                 else:
                     st.error("❌ Erro ao salvar configurações!")
-                    # Added print for better debug if error happens here
-                    print(f"Erro ao salvar configuração: {e}", file=sys.stderr); sys.stderr.flush()
+    
+    # Exibe informações atuais
+    if obra_config.get('id'):
+        st.markdown("---")
+        st.markdown("### 📊 Informações Atuais")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("💰 Orçamento", format_currency_br(obra_config.get('orcamento', 0)))
+        
+        with col2:
+            if obra_config.get('data_inicio'):
+                dias_decorridos = (date.today() - obra_config['data_inicio']).days
+                st.metric("�� Dias Decorridos", f"{dias_decorridos} dias")
+        
+        with col3:
+            if obra_config.get('data_fim_prevista'):
+                dias_restantes = (obra_config['data_fim_prevista'] - date.today()).days
+                st.metric("⏰ Dias Restantes", f"{dias_restantes} dias")
 
-def _create_obra_config(nome_obra, orcamento_total, data_inicio, data_previsao_fim):
-    """Cria uma nova configuração de obra"""
+def _save_obra_config(nome, orcamento, data_inicio, data_fim):
+    """Salva configuração da obra"""
     try:
-        conn, db_type = get_db_connection()
+        conn = get_connection()
         cursor = conn.cursor()
         
-        query = """
-            INSERT INTO obra_config (nome_obra, orcamento_total, data_inicio, data_previsao_fim)
-            VALUES (?, ?, ?, ?)
-        """
-        params = (nome_obra, orcamento_total, data_inicio, data_previsao_fim)
+        import os
+        is_postgres = os.getenv('DATABASE_URL') is not None
         
-        if db_type == 'postgresql':
-            query = query.replace('?', '%s')
-            cursor.execute(query, params)
+        # Verifica se já existe uma obra
+        cursor.execute("SELECT id FROM obras WHERE ativo = %s" if is_postgres else "SELECT id FROM obras WHERE ativo = ?", 
+                      (True if is_postgres else 1,))
+        
+        existing_obra = cursor.fetchone()
+        
+        if existing_obra:
+            # Atualiza obra existente
+            if is_postgres:
+                query = """
+                    UPDATE obras 
+                    SET nome = %s, orcamento = %s, data_inicio = %s, data_fim_prevista = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """
+            else:
+                query = """
+                    UPDATE obras 
+                    SET nome = ?, orcamento = ?, data_inicio = ?, data_fim_prevista = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """
+            
+            cursor.execute(query, (nome, orcamento, data_inicio, data_fim, existing_obra['id']))
         else:
-            cursor.execute(query, params)
+            # Cria nova obra
+            if is_postgres:
+                query = """
+                    INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
+                    VALUES (%s, %s, %s, %s, %s)
+                """
+            else:
+                query = """
+                    INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
+                    VALUES (?, ?, ?, ?, ?)
+                """
+            
+            cursor.execute(query, (nome, orcamento, data_inicio, data_fim, True if is_postgres else 1))
         
         conn.commit()
-        conn.close()
         return True
         
     except Exception as e:
-        print(f"Erro ao criar configuração de obra: {e}", file=sys.stderr); sys.stderr.flush()
+        print(f"Erro ao salvar configuração da obra: {repr(e)}", file=sys.stderr)
+        conn.rollback()
         return False
-
-def _update_obra_config(nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_id):
-    """Atualiza configurações da obra"""
-    try:
-        conn, db_type = get_db_connection()
-        cursor = conn.cursor()
-        
-        query = """
-            UPDATE obra_config 
-            SET nome_obra = ?, orcamento_total = ?, data_inicio = ?, data_previsao_fim = ?
-            WHERE id = ?
-        """
-        params = (nome_obra, orcamento_total, data_inicio, data_previsao_fim, obra_id)
-        
-        if db_type == 'postgresql':
-            query = query.replace('?', '%s')
-            cursor.execute(query, params)
-        else:
-            cursor.execute(query, params)
-        
-        conn.commit()
-        conn.close()
-        return True
-        
-    except Exception as e:
-        print(f"Erro ao atualizar configuração: {e}", file=sys.stderr); sys.stderr.flush()
-        return False
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
 
 def _show_categorias_config():
-    """Configurações de categorias"""
+    """Gestão de categorias"""
     st.subheader("🏷️ Gestão de Categorias")
     
-    categorias_raw = get_categorias_ativas()
-    # Ensure all items in categorias are dicts and have an 'id'
-    categorias = [cat for cat in categorias_raw if cat and cat.get('id') is not None]
+    # Formulário para nova categoria
+    with st.expander("➕ Adicionar Nova Categoria", expanded=False):
+        with st.form("nova_categoria_form"):
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                nome_categoria = st.text_input("Nome da Categoria", placeholder="Ex: Material Elétrico")
+                descricao_categoria = st.text_area("Descrição (opcional)", placeholder="Descrição da categoria...")
+            
+            with col2:
+                cor_categoria = st.color_picker("Cor da Categoria", value="#3498db")
+                st.write("**Preview:**")
+                st.markdown(
+                    f'<div style="background-color: {cor_categoria}; color: white; padding: 10px; '
+                    f'border-radius: 5px; text-align: center;">{nome_categoria or "Nome da Categoria"}</div>',
+                    unsafe_allow_html=True
+                )
+            
+            submitted = st.form_submit_button("➕ Adicionar Categoria", use_container_width=True)
+            
+            if submitted:
+                if not nome_categoria.strip():
+                    st.error("⚠️ O nome da categoria é obrigatório!")
+                else:
+                    if _save_categoria(nome_categoria, descricao_categoria, cor_categoria):
+                        st.success("✅ Categoria adicionada com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Erro ao adicionar categoria!")
     
-    if categorias:
-        st.markdown("### �� Categorias Cadastradas")
-        for categoria in categorias:
-            # Use format_currency_br for display
-            with st.expander(f"💰 {categoria['nome']} - {format_currency_br(categoria['orcamento_previsto'])}"):
-                with st.form(key=f"edit_categoria_{categoria['id']}"): # Unique key for each form
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        novo_nome = st.text_input(
-                            "Nome da Categoria",
-                            value=categoria['nome'],
-                            key=f"nome_{categoria['id']}" # Unique key
-                        )
-                        nova_descricao = st.text_area(
-                            "Descrição",
-                            value=categoria.get('descricao', ''),
-                            key=f"desc_{categoria['id']}" # Unique key
-                        )
-                    with col2:
-                        novo_orcamento = st.number_input(
-                            "Orçamento Previsto (R\$)",
-                            min_value=0.0,
-                            value=float(categoria['orcamento_previsto']), # Ensure float
-                            step=100.0,
-                            format="%.2f",
-                            key=f"orc_{categoria['id']}" # Unique key
-                        )
-                        ativa = st.checkbox(
-                            "Categoria Ativa",
-                            value=categoria.get('ativo', 1) == 1,
-                            key=f"ativa_{categoria['id']}" # Unique key
-                        )
-                    col_save, col_delete = st.columns(2)
-                    with col_save:
-                        if st.form_submit_button("💾 Salvar", type="primary", key=f"save_cat_{categoria['id']}"): # Unique key
-                            success = _update_categoria(
-                                categoria['id'], novo_nome, nova_descricao, 
-                                novo_orcamento, 1 if ativa else 0
-                            )
-                            if success:
-                                st.success("✅ Categoria atualizada!")
-                                st.rerun()
-                            else:
-                                st.error("❌ Erro ao atualizar categoria!")
-                    with col_delete:
-                        if st.form_submit_button("🗑️ Desativar", type="secondary", key=f"deactivate_cat_{categoria['id']}"): # Unique key
-                            success = _update_categoria(
-                                categoria['id'], novo_nome, nova_descricao, 
-                                novo_orcamento, 0 # Deactivate category
-                            )
-                            if success:
-                                st.success("✅ Categoria desativada!")
-                                st.rerun()
-                            else:
-                                st.error("❌ Erro ao desativar categoria!")
+    # Lista de categorias existentes
+    st.markdown("### 📋 Categorias Existentes")
     
-    st.markdown("---")
-    st.markdown("### ➕ Adicionar Nova Categoria")
-    with st.form("nova_categoria"):
-        col1, col2 = st.columns(2)
-        with col1:
-            nome_nova = st.text_input("Nome da Nova Categoria", key="new_cat_name") # Unique key
-            descricao_nova = st.text_area("Descrição", key="new_cat_desc") # Unique key
-        with col2:
-            orcamento_nova = st.number_input(
-                "Orçamento Previsto (R\$)",
-                min_value=0.0,
-                step=100.0,
-                format="%.2f",
-                key="new_cat_orc" # Unique key
-            )
-        if st.form_submit_button("➕ Criar Categoria", type="primary", key="create_cat_button"): # Unique key
-            if nome_nova:
-                success = _create_categoria(nome_nova, descricao_nova, orcamento_nova)
-                if success:
+    categorias = _get_all_categorias()
+    
+    if not categorias:
+        st.info("Nenhuma categoria cadastrada ainda.")
+        return
+    
+    for categoria in categorias:
+        with st.container():
+            col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+            
+            with col1:
+                # Nome com indicador de cor
+                st.markdown(
+                    f'<div style="display: flex; align-items: center;">'
+                    f'<div style="width: 20px; height: 20px; background-color: {categoria["cor"]}; '
+                    f'border-radius: 50%; margin-right: 10px;"></div>'
+                    f'<strong>{categoria["nome"]}</strong></div>',
+                    unsafe_allow_html=True
+                )
+                if categoria['descricao']:
+                    st.caption(categoria['descricao'])
+            
+            with col2:
+                # Status
+                status = "✅ Ativa" if categoria['ativo'] else "❌ Inativa"
+                st.write(status)
+            
+            with col3:
+                # Botão editar
+                if st.button("✏️", key=f"edit_{categoria['id']}", help="Editar categoria"):
+                    st.session_state[f"editing_{categoria['id']}"] = True
                     st.rerun()
-                # Success/error messages already handled in _create_categoria
-            else:
-                st.error("❌ Digite um nome para a categoria!")
+            
+            with col4:
+                # Botão ativar/desativar
+                if categoria['ativo']:
+                    if st.button("🚫", key=f"deactivate_{categoria['id']}", help="Desativar categoria"):
+                        if _toggle_categoria_status(categoria['id'], False):
+                            st.success("Categoria desativada!")
+                            st.rerun()
+                else:
+                    if st.button("✅", key=f"activate_{categoria['id']}", help="Ativar categoria"):
+                        if _toggle_categoria_status(categoria['id'], True):
+                            st.success("Categoria ativada!")
+                            st.rerun()
+            
+            # Formulário de edição (se ativo)
+            if st.session_state.get(f"editing_{categoria['id']}", False):
+                with st.form(f"edit_categoria_{categoria['id']}"):
+                    st.markdown("**Editando Categoria:**")
+                    
+                    edit_col1, edit_col2 = st.columns([2, 1])
+                    
+                    with edit_col1:
+                        novo_nome = st.text_input("Nome", value=categoria['nome'], key=f"nome_{categoria['id']}")
+                        nova_descricao = st.text_area("Descrição", value=categoria['descricao'] or "", key=f"desc_{categoria['id']}")
+                    
+                    with edit_col2:
+                        nova_cor = st.color_picker("Cor", value=categoria['cor'], key=f"cor_{categoria['id']}")
+                    
+                    edit_col1, edit_col2 = st.columns(2)
+                    
+                    with edit_col1:
+                        if st.form_submit_button("💾 Salvar", use_container_width=True):
+                            if _update_categoria(categoria['id'], novo_nome, nova_descricao, nova_cor):
+                                st.success("Categoria atualizada!")
+                                del st.session_state[f"editing_{categoria['id']}"]
+                                st.rerun()
+                            else:
+                                st.error("Erro ao atualizar categoria!")
+                    
+                    with edit_col2:
+                        if st.form_submit_button("❌ Cancelar", use_container_width=True):
+                            del st.session_state[f"editing_{categoria['id']}"]
+                            st.rerun()
+            
+            st.divider()
 
-def _update_categoria(categoria_id, nome, descricao, orcamento, ativo):
-    """Atualiza uma categoria"""
+def _save_categoria(nome, descricao, cor):
+    """Salva nova categoria"""
     try:
-        conn, db_type = get_db_connection()
+        conn = get_connection()
         cursor = conn.cursor()
         
-        query = """
-            UPDATE categorias 
-            SET nome = ?, descricao = ?, orcamento_previsto = ?, ativo = ?
-            WHERE id = ?
-        """
-        params = (nome, descricao, orcamento, ativo, categoria_id)
+        import os
+        is_postgres = os.getenv('DATABASE_URL') is not None
         
-        if db_type == 'postgresql':
-            query = query.replace('?', '%s')
-            cursor.execute(query, params)
+        if is_postgres:
+            query = """
+                INSERT INTO categorias (nome, descricao, cor, ativo)
+                VALUES (%s, %s, %s, %s)
+            """
         else:
-            cursor.execute(query, params)
+            query = """
+                INSERT INTO categorias (nome, descricao, cor, ativo)
+                VALUES (?, ?, ?, ?)
+            """
         
+        cursor.execute(query, (nome, descricao, cor, True if is_postgres else 1))
         conn.commit()
-        conn.close()
         return True
+        
     except Exception as e:
-        print(f"Erro ao atualizar categoria: {e}", file=sys.stderr); sys.stderr.flush()
+        print(f"Erro ao salvar categoria: {repr(e)}", file=sys.stderr)
+        conn.rollback()
         return False
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
 
-def _create_categoria(nome, descricao, orcamento):
-    """Cria uma nova categoria"""
+def _get_all_categorias():
+    """Busca todas as categorias (ativas e inativas)"""
     try:
-        conn, db_type = get_db_connection()
+        conn = get_connection()
         cursor = conn.cursor()
         
-        query = """
-            INSERT INTO categorias (nome, descricao, orcamento_previsto, ativo)
-            VALUES (?, ?, ?, 1)
-        """
-        params = (nome, descricao, orcamento)
+        cursor.execute("""
+            SELECT id, nome, descricao, cor, ativo, created_at
+            FROM categorias
+            ORDER BY ativo DESC, nome ASC
+        """)
+        
+        categorias = []
+        for row in cursor.fetchall():
+            categorias.append({
+                'id': row['id'],
+                'nome': row['nome'],
+                'descricao': row['descricao'],
+                'cor': row['cor'],
+                'ativo': bool(row['ativo']),
+                'created_at': row['created_at']
+            })
+        
+        return categorias
+        
+    except Exception as e:
+        print(f"Erro ao buscar categorias: {repr(e)}", file=sys.stderr)
+        return []
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
 
-        if db_type == 'postgresql':
-            query_returning = query.replace('?', '%s') + " RETURNING id"
-            cursor.execute(query_returning, params)
-            new_id = cursor.fetchone()[0]
-        else: # SQLite
-            cursor.execute(query, params)
-            new_id = cursor.lastrowid
+def _update_categoria(categoria_id, nome, descricao, cor):
+    """Atualiza categoria existente"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
         
-        conn.commit()
-        conn.close()
+        import os
+        is_postgres = os.getenv('DATABASE_URL') is not None
         
-        if new_id:
-            st.success(f"✅ Nova categoria '{nome}' criada com sucesso com ID: {new_id}!")
-            return True
+        if is_postgres:
+            query = """
+                UPDATE categorias 
+                SET nome = %s, descricao = %s, cor = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """
         else:
-            st.error("❌ Erro ao criar categoria: O ID da nova categoria não foi retornado. Verifique a configuração do banco de dados.")
-            return False
+            query = """
+                UPDATE categorias 
+                SET nome = ?, descricao = ?, cor = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """
+        
+        cursor.execute(query, (nome, descricao, cor, categoria_id))
+        conn.commit()
+        return True
         
     except Exception as e:
-        st.error(f"❌ Erro ao criar categoria: {str(e)}")
-        print(f"Erro ao criar categoria: {e}", file=sys.stderr); sys.stderr.flush()
+        print(f"Erro ao atualizar categoria: {repr(e)}", file=sys.stderr)
+        conn.rollback()
         return False
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
 
-def _show_sistema_config(user):
-    """Configurações do sistema"""
-    st.subheader("👥 Configurações do Sistema")
-    
-    st.markdown("### 👤 Usuário Atual")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.info(f"**Nome:** {user['nome']}")
-        st.info(f"**Email:** {user['email']}")
-    with col2:
-        st.info(f"**Tipo:** {user['tipo'].title()}")
-        st.info(f"**Status:** {'Ativo' if user.get('ativo', 1) else 'Inativo'}")
-    
-    st.markdown("### 📊 Estatísticas do Sistema")
+def _toggle_categoria_status(categoria_id, ativo):
+    """Ativa/desativa categoria"""
     try:
-        conn, db_type = get_db_connection()
+        conn = get_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE ativo = 1")
-        total_usuarios = cursor.fetchone()[0]
+        import os
+        is_postgres = os.getenv('DATABASE_URL') is not None
         
-        cursor.execute("SELECT COUNT(*) FROM categorias WHERE ativo = 1")
-        total_categorias = cursor.fetchone()[0]
+        if is_postgres:
+            query = """
+                UPDATE categorias 
+                SET ativo = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """
+        else:
+            query = """
+                UPDATE categorias 
+                SET ativo = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """
         
-        cursor.execute("SELECT COUNT(*) FROM lancamentos")
-        total_lancamentos = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM arquivos")
-        total_arquivos = cursor.fetchone()[0]
-        
-        conn.close()
-        
-        col1, col2, col3, col4 = st.columns(4)
-        with col1: st.metric("👥 Usuários Ativos", total_usuarios)
-        with col2: st.metric("🏷️ Categorias Ativas", total_categorias)
-        with col3: st.metric("💰 Lançamentos", total_lancamentos)
-        with col4: st.metric("📎 Arquivos", total_arquivos)
-        
-    except Exception as e:
-        st.error(f"❌ Erro ao buscar estatísticas: {e}")
-        print(f"Erro ao buscar estatisticas: {e}", file=sys.stderr); sys.stderr.flush()
-    
-    st.markdown("### 🔧 Manutenção")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📊 Verificar Integridade do Banco", type="secondary", key="check_db_integrity"): # Unique key
-            _verificar_integridade_banco()
-    with col2:
-        if st.button("🔄 Recarregar Sistema", type="secondary", key="reload_system"): # Unique key
-            st.rerun()
-
-def _verificar_integridade_banco():
-    """Verifica integridade do banco de dados"""
-    try:
-        conn, db_type = get_db_connection()
-        cursor = conn.cursor()
-        
-        if db_type == 'sqlite':
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tabelas = cursor.fetchall()
-            st.success(f"✅ Banco SQLite íntegro! {len(tabelas)} tabelas encontradas.")
-        else: # PostgreSQL
-            cursor.execute("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';")
-            tabelas = cursor.fetchall()
-            st.success(f"✅ Banco PostgreSQL íntegro! {len(tabelas)} tabelas encontradas.")
-        
-        cursor.execute("""
-            SELECT COUNT(*) FROM lancamentos l
-            LEFT JOIN categorias c ON l.categoria_id = c.id
-            WHERE c.id IS NULL
-        """)
-        orfaos_categoria = cursor.fetchone()[0]
-        
-        cursor.execute("""
-            SELECT COUNT(*) FROM lancamentos l
-            LEFT JOIN usuarios u ON l.usuario_id = u.id
-            WHERE u.id IS NULL
-        """)
-        orfaos_usuario = cursor.fetchone()[0]
-        
-        if orfaos_categoria > 0:
-            st.warning(f"⚠️ {orfaos_categoria} lançamento(s) com categoria inválida")
-        
-        if orfaos_usuario > 0:
-            st.warning(f"⚠️ {orfaos_usuario} lançamento(s) com usuário inválido")
-        
-        if orfaos_categoria == 0 and orfaos_usuario == 0:
-            st.success("✅ Nenhum dado órfão encontrado!")
-        
-        conn.close()
+        cursor.execute(query, (ativo if is_postgres else (1 if ativo else 0), categoria_id))
+        conn.commit()
+        return True
         
     except Exception as e:
-        st.error(f"❌ Erro na verificação: {e}")
-        print(f"Erro na verificacao de integridade: {e}", file=sys.stderr); sys.stderr.flush()
+        print(f"Erro ao alterar status da categoria: {repr(e)}", file=sys.stderr)
+        conn.rollback()
+        return False
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
