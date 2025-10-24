@@ -133,7 +133,7 @@ def format_currency(value):
     if value is None:
         value = 0
     # Usar .replace(',', 'X').replace('.', ',').replace('X', '.') para formatar corretamente no BR
-    return f"R\$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
 
 def format_currency_br(value):
     """Formata valor como moeda brasileira (alias)"""

@@ -34,7 +34,7 @@ def _show_obra_config(obra_config):
             )
             
             orcamento_total = st.number_input(
-                "💰 Orçamento Total (R\$)",
+                "💰 Orçamento Total (R$)",
                 min_value=0.0,
                 value=float(obra_config['orcamento_total']),
                 step=1000.0,
@@ -133,7 +133,7 @@ def _show_categorias_config():
         
         for categoria in categorias:
             # A chave do formulário agora está segura, pois categoria['id'] não será None
-            with st.expander(f"✨ {categoria['nome']} - R\$ {categoria['orcamento_previsto']:,.2f}"):
+            with st.expander(f"✨ {categoria['nome']} - R$ {categoria['orcamento_previsto']:,.2f}"):
                 with st.form(key=f"edit_categoria_{categoria['id']}"): 
                     col1, col2 = st.columns(2)
                     
@@ -152,7 +152,7 @@ def _show_categorias_config():
                     
                     with col2:
                         novo_orcamento = st.number_input(
-                            "Orçamento Previsto (R\$)",
+                            "Orçamento Previsto (R$)",
                             min_value=0.0,
                             value=float(categoria['orcamento_previsto']),
                             step=100.0,
@@ -206,7 +206,7 @@ def _show_categorias_config():
         
         with col2:
             orcamento_nova = st.number_input(
-                "Orçamento Previsto (R\$)",
+                "Orçamento Previsto (R$)",
                 min_value=0.0,
                 step=100.0,
                 format="%.2f"

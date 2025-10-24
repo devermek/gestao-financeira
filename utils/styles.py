@@ -8,8 +8,10 @@ def load_css():
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         
         /* Configurações globais - MODO NOTURNO */
+        /* Força o fundo da aplicação a ser escuro */
         .stApp {
             background-color: #0e1117 !important;
+            color: #ffffff !important; /* Garante que o texto padrão da app seja branco */
         }
         
         .main .block-container {
@@ -19,16 +21,22 @@ def load_css():
         }
         
         /* Sidebar modo noturno */
-        .css-1d391kg {
+        .css-1d391kg { /* Selector para a sidebar */
             background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%) !important;
+            color: #ffffff !important; /* Garante texto branco na sidebar */
         }
         
-        .css-1d391kg .css-1v0mbdj {
+        .css-1d391kg .css-1v0mbdj { /* Título da sidebar */
+            color: white !important;
+        }
+
+        /* Ajuste para o texto principal do sidebar */
+        .st-emotion-cache-1r6dm1s { /* ou outro seletor que abranja o texto principal da sidebar */
             color: white !important;
         }
         
-        /* Textos gerais em modo noturno */
-        .stMarkdown, .stText, p, span, div {
+        /* Textos gerais em modo noturno (incluindo li) */
+        .stMarkdown, .stText, p, span, div, li, a { /* Adicionado 'a' para links */
             color: #ffffff !important;
         }
         
@@ -241,7 +249,7 @@ def load_css():
         }
         
         /* Form submit button */
-        .stForm .stButton > button[kind="primary"] { /* Adicionado [kind="primary"] para ser mais específico */
+        .stForm .stButton > button[kind="primary"] {
             background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
             color: white !important;
             font-weight: bold;
@@ -265,6 +273,7 @@ def load_css():
         .stSelectbox select:focus {
             border-color: #667eea !important;
             box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.25) !important;
+            outline: none !important; /* Remove o outline padrão do navegador */
             transition: all 0.3s ease;
         }
         
@@ -272,7 +281,7 @@ def load_css():
         .stNumberInput input::placeholder,
         .stTextInput input::placeholder,
         .stTextArea textarea::placeholder {
-            color: rgba(255, 255, 255, 0.5) !important;
+            color: rgba(255, 255, 255, 0.7) !important; /* Mais claro */
             font-style: italic;
         }
         
@@ -285,31 +294,42 @@ def load_css():
             margin: 1rem 0;
         }
         
-        /* Inputs customizados - Modo noturno (transferido de lancamentos.py) */
+        /* Inputs customizados - Modo noturno (AJUSTADO para melhor visibilidade) */
         .stTextInput > div > div > input,
         .stNumberInput > div > div > input,
         .stTextArea > div > div > textarea,
-        .stSelectbox > div > div > select,
         .stDateInput > div > div > input {
-            background-color: #3498db !important; /* Cor mais clara para contraste com o tema escuro geral */
-            border: 2px solid #5dade2 !important;
-            color: #ffffff !important;
+            background-color: #2c3e50 !important; /* Cinza azulado escuro para o fundo dos inputs */
+            border: 2px solid #3498db !important; /* Borda azul para destaque */
+            color: #ecf0f1 !important; /* Texto branco-acinzentado */
             border-radius: 8px !important;
             padding: 0.75rem !important;
             font-size: 1rem !important;
             font-weight: 500 !important;
             transition: all 0.3s ease !important;
         }
-        
-        .stTextInput > div > div > input:focus,
-        .stNumberInput > div > div > input:focus,
-        .stTextArea > div > div > textarea:focus,
-        .stSelectbox > div > div > select:focus,
-        .stDateInput > div > div > input:focus {
-            background-color: #5dade2 !important;
-            border-color: #85c1e9 !important;
-            box-shadow: 0 0 0 3px rgba(133, 193, 233, 0.4) !important;
-            outline: none !important;
+
+        /* Selectbox customizado - Modo noturno para melhor visibilidade */
+        .stSelectbox > div > div > div { /* Target the container of the selectbox content */
+            background-color: #2c3e50 !important; /* Fundo escuro */
+            border: 2px solid #3498db !important; /* Borda azul */
+            color: #ecf0f1 !important; /* Texto claro */
+            border-radius: 8px !important;
+        }
+        .stSelectbox > div > div > div > div { /* Target the displayed text inside */
+            color: #ecf0f1 !important; /* Ensure selected text is visible */
+        }
+        /* Options in dropdown - (Este seletor pode variar dependendo da versão do Streamlit) */
+        div[data-baseweb="select"] div[role="listbox"] { /* Target the dropdown list itself */
+            background-color: #1a1a2e !important;
+            color: #ecf0f1 !important;
+        }
+        div[data-baseweb="select"] div[role="option"] { /* Target individual options */
+            color: #ecf0f1 !important;
+        }
+        div[data-baseweb="select"] div[role="option"]:hover { /* Hover effect for options */
+            background-color: #34495e !important;
+            color: white !important;
         }
         
         /* Remover setas de spin do number input (transferido de lancamentos.py) */
@@ -361,7 +381,24 @@ def load_css():
         .css-1d391kg .stSelectbox label {
             color: white !important;
         }
-        
+        /* Cor dos itens do selectbox na sidebar */
+        .css-1d391kg .stSelectbox > div > div > div {
+            color: #ecf0f1 !important;
+            background-color: #2c3e50 !important;
+        }
+        /* Opções do selectbox na sidebar */
+        .css-1d391kg div[data-baseweb="select"] div[role="listbox"] {
+            background-color: #1a1a2e !important;
+            color: #ecf0f1 !important;
+        }
+        .css-1d391kg div[data-baseweb="select"] div[role="option"] {
+            color: #ecf0f1 !important;
+        }
+        .css-1d391kg div[data-baseweb="select"] div[role="option"]:hover {
+            background-color: #34495e !important;
+            color: white !important;
+        }
+
         .css-1d391kg .stMetric {
             background: rgba(255, 255, 255, 0.1);
             padding: 0.5rem;
@@ -392,7 +429,7 @@ def load_css():
         /* Error alert */
         .stAlert[data-baseweb="notification"][kind="error"] {
             background-color: rgba(244, 67, 54, 0.1) !important;
-            border-left: 4px solid #f44336;
+            border-left: 44336;
         }
         
         /* Warning alert */
