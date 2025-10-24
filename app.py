@@ -13,16 +13,15 @@ from modules.configuracoes import show_configuracoes
 from utils.helpers import get_obra_config, format_currency_br # Importar format_currency_br para uso na sidebar
 from utils.styles import load_css # Importar a função para carregar CSS
 
-# Configuração da página
+# Configuração da página - REMOVIDO ARGUMENTO 'theme'
 st.set_page_config(
     page_title="Sistema de Gestão de Obras",
     page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="expanded",
-    theme="dark" # <--- CHAVE PARA FORÇAR O TEMA ESCURO NATIVO DO STREAMLIT
+    initial_sidebar_state="expanded"
 )
 
-# Carregar CSS personalizado (agora para aprimorar o tema dark nativo)
+# Carregar CSS personalizado (agora ele é o ÚNICO responsável pelo tema escuro)
 load_css()
 
 # Verificar autenticação
@@ -91,4 +90,4 @@ else:
             show_configuracoes(user, obra_config)
     except Exception as e:
         st.error(f"❌ Erro ao carregar a página: {e}")
-        st.info("�� Tente recarregar a página ou entre em contato com o suporte.")
+        st.info("🔄 Tente recarregar a página ou entre em contato com o suporte.")
