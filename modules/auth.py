@@ -2,6 +2,7 @@ import sys
 import streamlit as st
 from datetime import datetime, date, timedelta
 from config.database import get_connection, init_db
+import os
 
 def authenticate_user(email, senha):
     """Autentica usuário no sistema"""
@@ -185,8 +186,8 @@ def create_first_user():
         st.info("""
         **Dados criados:**
         - 👤 Usuário: deverson@obra.com / 123456
-        - ��️ 10 categorias padrão
-        - ��️ Obra inicial com orçamento de R\$ 100.000,00
+        - 🏷️ 10 categorias padrão
+        - 🏗️ Obra inicial com orçamento de R\$ 100.000,00
         
         **Agora você pode fazer login!**
         """)
@@ -198,6 +199,202 @@ def create_first_user():
         conn.rollback()
         st.error(f"Erro ao inicializar sistema: {str(e)}")
         return False
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
+
+def migrate_database():
+    """Migra o banco de dados para corrigir tipos de dados"""
+    
+    database_url = os.getenv('DATABASE_URL')
+    if not database_url:
+        return False, "DATABASE_URL não encontrada. Este script é apenas para PostgreSQL."
+    
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        
+        print("🔧 Conectando ao PostgreSQL para migração...", file=sys.stderr)
+        conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor, sslmode='require')
+        cursor = conn.cursor()
+        
+        print("🗑️ Removendo tabelas existentes...", file=sys.stderr)
+        
+        # Remove tabelas na ordem correta (devido às foreign keys)
+        tables_to_drop = ['arquivos', 'lancamentos', 'categorias', 'obras', 'usuarios']
+        
+        for table in tables_to_drop:
+            try:
+                cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
+                print(f"   ✅ Tabela {table} removida", file=sys.stderr)
+            except Exception as e:
+                print(f"   ⚠️ Erro ao remover {table}: {e}", file=sys.stderr)
+        
+        print("🏗️ Criando tabelas com tipos corretos...", file=sys.stderr)
+        
+        # Cria tabela de usuários
+        cursor.execute("""
+            CREATE TABLE usuarios (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(100) NOT NULL,
+                email VARCHAR(100) UNIQUE NOT NULL,
+                senha VARCHAR(255) NOT NULL,
+                ativo BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        print("   ✅ Tabela usuarios criada", file=sys.stderr)
+        
+        # Cria tabela de obras
+        cursor.execute("""
+            CREATE TABLE obras (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(200) NOT NULL,
+                orcamento DECIMAL(15,2) DEFAULT 0,
+                data_inicio DATE,
+                data_fim_prevista DATE,
+                ativo BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        print("   ✅ Tabela obras criada", file=sys.stderr)
+        
+        # Cria tabela de categorias
+        cursor.execute("""
+            CREATE TABLE categorias (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(100) NOT NULL,
+                descricao TEXT,
+                cor VARCHAR(7) DEFAULT '#3498db',
+                ativo BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        print("   ✅ Tabela categorias criada", file=sys.stderr)
+        
+        # Cria tabela de lançamentos
+        cursor.execute("""
+            CREATE TABLE lancamentos (
+                id SERIAL PRIMARY KEY,
+                obra_id INTEGER NOT NULL REFERENCES obras(id) ON DELETE CASCADE,
+                categoria_id INTEGER NOT NULL REFERENCES categorias(id) ON DELETE RESTRICT,
+                descricao TEXT NOT NULL,
+                valor DECIMAL(15,2) NOT NULL CHECK (valor > 0),
+                data_lancamento DATE NOT NULL,
+                observacoes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        print("   ✅ Tabela lancamentos criada", file=sys.stderr)
+        
+        # Cria tabela de arquivos
+        cursor.execute("""
+            CREATE TABLE arquivos (
+                id SERIAL PRIMARY KEY,
+                lancamento_id INTEGER NOT NULL REFERENCES lancamentos(id) ON DELETE CASCADE,
+                nome_arquivo VARCHAR(255) NOT NULL,
+                tipo_arquivo VARCHAR(100),
+                tamanho_arquivo INTEGER,
+                conteudo_arquivo BYTEA,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        print("   ✅ Tabela arquivos criada", file=sys.stderr)
+        
+        # Cria função para updated_at
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION update_updated_at_column()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ language 'plpgsql';
+        """)
+        print("   ✅ Função update_updated_at_column criada", file=sys.stderr)
+        
+        # Cria triggers
+        tables_with_updated_at = ['usuarios', 'obras', 'categorias', 'lancamentos']
+        for table in tables_with_updated_at:
+            cursor.execute(f"""
+                CREATE TRIGGER update_{table}_updated_at
+                    BEFORE UPDATE ON {table}
+                    FOR EACH ROW
+                    EXECUTE FUNCTION update_updated_at_column();
+            """)
+            print(f"   ✅ Trigger para {table} criado", file=sys.stderr)
+        
+        # Cria índices
+        indexes = [
+            "CREATE INDEX idx_lancamentos_obra_id ON lancamentos(obra_id);",
+            "CREATE INDEX idx_lancamentos_categoria_id ON lancamentos(categoria_id);",
+            "CREATE INDEX idx_lancamentos_data ON lancamentos(data_lancamento);",
+            "CREATE INDEX idx_arquivos_lancamento_id ON arquivos(lancamento_id);",
+            "CREATE INDEX idx_usuarios_email ON usuarios(email);"
+        ]
+        
+        for index_sql in indexes:
+            cursor.execute(index_sql)
+        print("   ✅ Índices criados", file=sys.stderr)
+        
+        print("📊 Inserindo dados iniciais...", file=sys.stderr)
+        
+        # Insere usuário padrão
+        cursor.execute("""
+            INSERT INTO usuarios (nome, email, senha, ativo)
+            VALUES (%s, %s, %s, %s)
+        """, ("Deverson", "deverson@obra.com", "123456", True))
+        print("   ✅ Usuário padrão criado", file=sys.stderr)
+        
+        # Insere categorias padrão
+        categorias_padrao = [
+            ("Material de Construção", "Materiais básicos como cimento, areia, brita", "#e74c3c"),
+            ("Mão de Obra", "Pagamentos de funcionários e prestadores", "#3498db"),
+            ("Ferramentas e Equipamentos", "Compra e aluguel de ferramentas", "#f39c12"),
+            ("Elétrica", "Material e serviços elétricos", "#9b59b6"),
+            ("Hidráulica", "Material e serviços hidráulicos", "#1abc9c"),
+            ("Acabamento", "Materiais de acabamento e pintura", "#34495e"),
+            ("Documentação", "Taxas, licenças e documentos", "#95a5a6"),
+            ("Transporte", "Fretes e transportes diversos", "#e67e22"),
+            ("Alimentação", "Alimentação da equipe", "#27ae60"),
+            ("Outros", "Gastos diversos não categorizados", "#7f8c8d")
+        ]
+        
+        for nome, descricao, cor in categorias_padrao:
+            cursor.execute("""
+                INSERT INTO categorias (nome, descricao, cor, ativo)
+                VALUES (%s, %s, %s, %s)
+            """, (nome, descricao, cor, True))
+        print("   ✅ Categorias padrão criadas", file=sys.stderr)
+        
+        # Insere obra padrão
+        data_inicio = date.today()
+        data_fim = data_inicio + timedelta(days=365)
+        
+        cursor.execute("""
+            INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
+            VALUES (%s, %s, %s, %s, %s)
+        """, ("Minha Obra", 100000.00, data_inicio, data_fim, True))
+        print("   ✅ Obra padrão criada", file=sys.stderr)
+        
+        conn.commit()
+        
+        print("🎉 Migração concluída com sucesso!", file=sys.stderr)
+        
+        return True, "Migração concluída com sucesso!"
+        
+    except Exception as e:
+        print(f"❌ Erro na migração: {repr(e)}", file=sys.stderr)
+        if 'conn' in locals():
+            conn.rollback()
+        return False, f"Erro na migração: {str(e)}"
     finally:
         try:
             cursor.close()
@@ -344,8 +541,8 @@ def show_login_page():
     with col_info2:
         st.markdown("""
         ### 🔧 Primeiro Acesso
-        1. Clique em "Inicializar Sistema"
-        2. Aguarde a criação das tabelas
+        1. Clique em "Migrar Banco" se PostgreSQL
+        2. Ou "Inicializar Sistema" se primeiro uso
         3. Use: deverson@obra.com / 123456
         4. Configure sua obra nas Configurações
         """)
@@ -373,6 +570,28 @@ def _show_login_form():
         with col_init:
             init_button = st.form_submit_button("🔧 Inicializar Sistema", use_container_width=True)
     
+    # Botão de migração para PostgreSQL
+    if os.getenv('DATABASE_URL'):
+        if st.button("🔄 Migrar Banco (PostgreSQL)", use_container_width=True, help="Corrige problemas de tipos de dados"):
+            with st.spinner("Executando migração..."):
+                try:
+                    success, message = migrate_database()
+                    if success:
+                        st.success("✅ Migração concluída com sucesso!")
+                        st.info("""
+                        **Dados criados:**
+                        - 👤 Usuário: deverson@obra.com / 123456
+                        - 🏷️ 10 categorias padrão
+                        - 🏗️ Obra inicial com orçamento de R\$ 100.000,00
+                        
+                        **Agora você pode fazer login!**
+                        """)
+                        st.balloons()
+                    else:
+                        st.error(f"❌ {message}")
+                except Exception as e:
+                    st.error(f"❌ Erro na migração: {str(e)}")
+    
     # Botão de login rápido para desenvolvimento
     if st.button("⚡ Login Rápido (Dev)", use_container_width=True, help="Login automático para desenvolvimento"):
         user = authenticate_user("deverson@obra.com", "123456")
@@ -382,7 +601,7 @@ def _show_login_form():
             st.success("Login realizado com sucesso!")
             st.rerun()
         else:
-            st.error("Usuário padrão não encontrado. Inicialize o sistema primeiro.")
+            st.error("Usuário padrão não encontrado. Execute a migração ou inicialização primeiro.")
     
     # Processa login
     if login_button:
@@ -475,7 +694,7 @@ def show_user_header():
         col1, col2, col3 = st.columns([2, 1, 1])
         
         with col1:
-            st.markdown(f"### �� Olá, **{user['nome']}**!")
+            st.markdown(f"### 👋 Olá, **{user['nome']}**!")
             st.caption(f"📧 {user['email']}")
         
         with col2:
@@ -606,7 +825,6 @@ def get_user_stats():
         print(f"Erro ao obter estatísticas do usuário: {repr(e)}", file=sys.stderr)
         return None
 
-# Função para verificar se é primeiro acesso
 def is_first_access():
     """Verifica se é o primeiro acesso ao sistema"""
     try:

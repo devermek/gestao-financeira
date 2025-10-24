@@ -61,14 +61,31 @@ def init_db():
                 conn = get_connection()
                 cursor = conn.cursor()
         
+        # Verifica se as tabelas já existem (PostgreSQL)
+        if is_postgres:
+            cursor.execute("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_name = 'usuarios'
+            """)
+            
+            if cursor.fetchone():
+                print("⚠️ Tabelas já existem no PostgreSQL. Use o script migrate_db.py para resetar.", file=sys.stderr)
+                return
+        
         # Cria tabelas
         if is_postgres:
             # PostgreSQL - Produção
             print("Criando tabelas PostgreSQL...", file=sys.stderr)
             
+            # Remove tabelas se existirem (para reset)
+            tables_to_drop = ['arquivos', 'lancamentos', 'categorias', 'obras', 'usuarios']
+            for table in tables_to_drop:
+                cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
+            
             # Tabela de usuários
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS usuarios (
+                CREATE TABLE usuarios (
                     id SERIAL PRIMARY KEY,
                     nome VARCHAR(100) NOT NULL,
                     email VARCHAR(100) UNIQUE NOT NULL,
@@ -76,12 +93,12 @@ def init_db():
                     ativo BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+                );
             """)
             
             # Tabela de obras
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS obras (
+                CREATE TABLE obras (
                     id SERIAL PRIMARY KEY,
                     nome VARCHAR(200) NOT NULL,
                     orcamento DECIMAL(15,2) DEFAULT 0,
@@ -90,12 +107,12 @@ def init_db():
                     ativo BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+                );
             """)
             
             # Tabela de categorias
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS categorias (
+                CREATE TABLE categorias (
                     id SERIAL PRIMARY KEY,
                     nome VARCHAR(100) NOT NULL,
                     descricao TEXT,
@@ -103,12 +120,12 @@ def init_db():
                     ativo BOOLEAN DEFAULT TRUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+                );
             """)
             
             # Tabela de lançamentos
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS lancamentos (
+                CREATE TABLE lancamentos (
                     id SERIAL PRIMARY KEY,
                     obra_id INTEGER NOT NULL REFERENCES obras(id) ON DELETE CASCADE,
                     categoria_id INTEGER NOT NULL REFERENCES categorias(id) ON DELETE RESTRICT,
@@ -118,12 +135,12 @@ def init_db():
                     observacoes TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+                );
             """)
             
             # Tabela de arquivos
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS arquivos (
+                CREATE TABLE arquivos (
                     id SERIAL PRIMARY KEY,
                     lancamento_id INTEGER NOT NULL REFERENCES lancamentos(id) ON DELETE CASCADE,
                     nome_arquivo VARCHAR(255) NOT NULL,
@@ -131,7 +148,7 @@ def init_db():
                     tamanho_arquivo INTEGER,
                     conteudo_arquivo BYTEA,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+                );
             """)
             
             # Função para atualizar updated_at
@@ -149,7 +166,6 @@ def init_db():
             tables_with_updated_at = ['usuarios', 'obras', 'categorias', 'lancamentos']
             for table in tables_with_updated_at:
                 cursor.execute(f"""
-                    DROP TRIGGER IF EXISTS update_{table}_updated_at ON {table};
                     CREATE TRIGGER update_{table}_updated_at
                         BEFORE UPDATE ON {table}
                         FOR EACH ROW
@@ -157,14 +173,14 @@ def init_db():
                 """)
             
             # Índices para performance
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_lancamentos_obra_id ON lancamentos(obra_id);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_lancamentos_categoria_id ON lancamentos(categoria_id);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_lancamentos_data ON lancamentos(data_lancamento);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_arquivos_lancamento_id ON arquivos(lancamento_id);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email);")
+            cursor.execute("CREATE INDEX idx_lancamentos_obra_id ON lancamentos(obra_id);")
+            cursor.execute("CREATE INDEX idx_lancamentos_categoria_id ON lancamentos(categoria_id);")
+            cursor.execute("CREATE INDEX idx_lancamentos_data ON lancamentos(data_lancamento);")
+            cursor.execute("CREATE INDEX idx_arquivos_lancamento_id ON arquivos(lancamento_id);")
+            cursor.execute("CREATE INDEX idx_usuarios_email ON usuarios(email);")
             
         else:
-            # SQLite - Desenvolvimento
+            # SQLite - Desenvolvimento (mantém como estava)
             print("Criando tabelas SQLite...", file=sys.stderr)
             
             # Tabela de usuários
@@ -264,7 +280,7 @@ def init_db():
     finally:
         cursor.close()
         conn.close()
-
+        
 def test_connection():
     """Testa a conexão com o banco de dados"""
     try:
