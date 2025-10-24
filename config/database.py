@@ -1,90 +1,108 @@
 import sqlite3
 import os
-import pandas as pd
-import sys # <-- ESTA LINHA É CRÍTICA!
+import sys # CRITICAL FOR PRINTING TO STDERR
 
-# Necessário para lidar com tipos de retorno de banco de dados em auth.py
+# Necessary for handling database return types in auth.py
 try:
     import psycopg2.extras
-    # RealDictRow é para ser usado no auth.py para isinstance() checks
     RealDictRow = psycopg2.extras.RealDictRow 
 except ImportError:
-    RealDictRow = type(None) # Tipo dummy caso psycopg2 não esteja instalado
+    RealDictRow = type(None) # Dummy type if psycopg2 is not installed
 
 def get_db_connection():
     """
-    Conecta ao banco de dados (SQLite local ou PostgreSQL no Render).
-    Retorna uma tupla: (objeto de conexão, string do tipo de banco de dados).
+    Connects to the database (local SQLite or PostgreSQL on Render).
+    Returns a tuple: (connection object, database type string).
+    Raises an exception if connection fails.
     """
     database_url = os.getenv('DATABASE_URL')
     
     if database_url:
-        # Ambiente de produção (PostgreSQL)
         try:
             import psycopg2
-            from psycopg2.extras import RealDictCursor # Re-importar RealDictCursor
-            print(f"🔗 Tentando conectar ao PostgreSQL...", file=sys.stderr); sys.stderr.flush()
+            from psycopg2.extras import RealDictCursor
+            print(f"🔗 Attempting to connect to PostgreSQL...", file=sys.stderr); sys.stderr.flush()
             
             dsn_to_connect = database_url
-            # Lógica mais robusta para adicionar sslmode=require
             if 'supabase.co' in database_url or 'neon.tech' in database_url:
                 if '?' in database_url:
                     dsn_to_connect = database_url + "&sslmode=require"
                 else:
                     dsn_to_connect = database_url + "?sslmode=require"
 
-            conn = psycopg2.connect(dsn_to_connect, cursor_factory=RealDictCursor) # Voltar a usar RealDictCursor
-            print("✅ Conectado ao PostgreSQL!", file=sys.stderr); sys.stderr.flush()
+            conn = psycopg2.connect(dsn_to_connect, cursor_factory=RealDictCursor)
+            print("✅ Connected to PostgreSQL!", file=sys.stderr); sys.stderr.flush()
             return conn, 'postgresql'
         except Exception as e:
-            print(f"❌ Erro PostgreSQL: {e}", file=sys.stderr); sys.stderr.flush()
-            print("�� Fallback para SQLite...", file=sys.stderr); sys.stderr.flush()
-            # Fallback para SQLite se PostgreSQL falhar
-            conn = get_sqlite_connection()
-            return conn, 'sqlite'
+            # DO NOT FALLBACK HERE. Raise the error for init_db to handle.
+            print(f"❌ PostgreSQL Connection Error: {repr(e)}", file=sys.stderr); sys.stderr.flush()
+            raise ConnectionError(f"Failed to connect to PostgreSQL: {e}") from e
     else:
-        # Ambiente local (SQLite)
-        conn = get_sqlite_connection()
+        # Local environment (SQLite)
+        print("🔗 Connecting to local SQLite...", file=sys.stderr); sys.stderr.flush()
+        db_path = "obra_database.db"
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row # Allows accessing columns by name (dict-like)
         return conn, 'sqlite'
 
-def get_sqlite_connection():
-    """Conexão SQLite"""
-    print("🔗 Conectando ao SQLite local...", file=sys.stderr); sys.stderr.flush()
-    db_path = "obra_database.db"
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row # Permite acessar colunas por nome
-    return conn
-
-# REMOVIDO: A função get_current_db_type() não é mais necessária.
-
 def init_db():
-    """Inicializa o banco de dados com todas as tabelas"""
-    conn, db_type = get_db_connection() # Obtém a conexão e o tipo de DB real
-    conn.close() # Fecha a conexão, pois init_postgresql/sqlite abrirão a sua própria.
+    """Initializes the database with all tables"""
+    print("🔄 Initializing database...", file=sys.stderr); sys.stderr.flush()
+    db_type = 'sqlite' # Default to sqlite, will try postgresql first
+    try:
+        # Attempt to connect to determine DB type first. Connection is short-lived.
+        conn, connected_db_type = get_db_connection()
+        conn.close() 
+        db_type = connected_db_type # If connected, use that type
+        print(f"Detected DB type: {db_type}", file=sys.stderr); sys.stderr.flush()
+    except ConnectionError as ce:
+        print(f"⚠️ Initial DB connection failed (PostgreSQL): {repr(ce)}. Falling back to SQLite.", file=sys.stderr); sys.stderr.flush()
+        # db_type remains 'sqlite'
+    except Exception as e: # Catch any other unexpected errors during initial connection
+        print(f"⚠️ Unexpected error during initial DB connection: {repr(e)}. Falling back to SQLite.", file=sys.stderr); sys.stderr.flush()
+        # db_type remains 'sqlite'
+
 
     if db_type == 'postgresql':
         try:
+            print("Attempting to initialize PostgreSQL...", file=sys.stderr); sys.stderr.flush()
             init_postgresql()
+            print("PostgreSQL initialization completed.", file=sys.stderr); sys.stderr.flush()
         except Exception as e:
-            print(f"❌ Erro ao inicializar PostgreSQL: {e}", file=sys.stderr); sys.stderr.flush()
-            print("🔄 Inicializando SQLite como fallback...", file=sys.stderr); sys.stderr.flush()
-            init_sqlite()
+            print(f"❌ Error initializing PostgreSQL: {repr(e)}", file=sys.stderr); sys.stderr.flush()
+            print("🔄 Initializing SQLite as fallback...", file=sys.stderr); sys.stderr.flush()
+            init_sqlite() # Fallback to SQLite if PostgreSQL init fails
     else:
+        print("Attempting to initialize SQLite...", file=sys.stderr); sys.stderr.flush()
         init_sqlite()
+        print("SQLite initialization completed.", file=sys.stderr); sys.stderr.flush()
+
 
 def init_postgresql():
-    """Inicializa banco PostgreSQL"""
-    print("🐘 Inicializando PostgreSQL...", file=sys.stderr); sys.stderr.flush()
-    conn, _ = get_db_connection() # Apenas a conexão é necessária aqui, o tipo já foi determinado
+    """Initializes PostgreSQL database"""
+    print("🐘 Initializing PostgreSQL...", file=sys.stderr); sys.stderr.flush()
+    conn, _ = get_db_connection()
     cursor = conn.cursor()
     
-    # Helper para criação de triggers para simplificar e evitar o erro "near OR"
+    # DROP TABLES FIRST - IMPORTANT FOR CLEAN RE-INITIALIZATION
+    # This is dangerous for production but necessary for dev with persistent issues
+    # BE CAREFUL WITH THIS IN PRODUCTION!
+    print("Dropping existing tables for clean re-initialization...", file=sys.stderr); sys.stderr.flush()
+    cursor.execute("DROP TABLE IF EXISTS arquivos CASCADE;")
+    cursor.execute("DROP TABLE IF EXISTS lancamentos CASCADE;")
+    cursor.execute("DROP TABLE IF EXISTS categorias CASCADE;")
+    cursor.execute("DROP TABLE IF EXISTS usuarios CASCADE;")
+    cursor.execute("DROP TABLE IF EXISTS obra_config CASCADE;")
+    cursor.execute("DROP FUNCTION IF EXISTS update_timestamp();")
+    conn.commit()
+    print("Existing tables dropped.", file=sys.stderr); sys.stderr.flush()
+
+
+    # Helper to create triggers to simplify and avoid "near OR" error
     def create_update_timestamp_trigger(cursor, table_name, trigger_name_suffix):
         trigger_name = f"update_{table_name}_{trigger_name_suffix}"
         try:
-            cursor.execute(f"""
-                DROP TRIGGER IF EXISTS {trigger_name} ON {table_name};
-            """)
+            # DROP TRIGGER IF EXISTS already handled by table drop, but keeping just in case
             cursor.execute(f"""
                 CREATE TRIGGER {trigger_name}
                 BEFORE UPDATE ON {table_name}
@@ -92,9 +110,9 @@ def init_postgresql():
                 EXECUTE FUNCTION update_timestamp();
             """)
         except Exception as e:
-            print(f"❌ Erro ao criar trigger '{trigger_name}' para a tabela '{table_name}': {e}", file=sys.stderr); sys.stderr.flush()
+            print(f"❌ Error creating trigger '{trigger_name}' for table '{table_name}': {repr(e)}", file=sys.stderr); sys.stderr.flush()
 
-    # Criação da função de trigger (sempre a primeira)
+    # Create trigger function (always the first)
     try:
         cursor.execute("""
             CREATE OR REPLACE FUNCTION update_timestamp()
@@ -105,10 +123,11 @@ def init_postgresql():
             END;
             $$ LANGUAGE plpgsql;
         """)
+        conn.commit() # Commit function creation
     except Exception as e:
-        print(f"❌ Erro ao criar função 'update_timestamp()': {e}", file=sys.stderr); sys.stderr.flush()
+        print(f"❌ Error creating function 'update_timestamp()': {repr(e)}", file=sys.stderr); sys.stderr.flush()
 
-    # Tabela de usuários (com 'ativo' como BOOLEAN e 'updated_at')
+    # Users table ('active' as BOOLEAN and 'updated_at')
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id SERIAL PRIMARY KEY,
@@ -123,7 +142,7 @@ def init_postgresql():
     """)
     create_update_timestamp_trigger(cursor, 'usuarios', 'updated_at')
     
-    # Tabela de categorias
+    # Categories table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             id SERIAL PRIMARY KEY,
@@ -137,7 +156,7 @@ def init_postgresql():
     """)
     create_update_timestamp_trigger(cursor, 'categorias', 'updated_at')
 
-    # Tabela de lançamentos
+    # Entries table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS lancamentos (
             id SERIAL PRIMARY KEY,
@@ -155,7 +174,7 @@ def init_postgresql():
     """)
     create_update_timestamp_trigger(cursor, 'lancamentos', 'updated_at')
     
-    # Tabela de arquivos
+    # Files table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS arquivos (
             id SERIAL PRIMARY KEY,
@@ -163,7 +182,7 @@ def init_postgresql():
             tipo VARCHAR(100) NOT NULL,
             tamanho INTEGER,
             conteudo BYTEA,
-            lancamento_id INTEGER, -- Pode ser NULL se o arquivo não estiver associado a um lançamento
+            lancamento_id INTEGER, # Can be NULL if file is not associated with an entry
             usuario_id INTEGER NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -173,7 +192,7 @@ def init_postgresql():
     """)
     create_update_timestamp_trigger(cursor, 'arquivos', 'updated_at')
     
-    # Tabela de configurações da obra
+    # Project config table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS obra_config (
             id SERIAL PRIMARY KEY,
@@ -190,15 +209,21 @@ def init_postgresql():
     conn.commit()
     cursor.close()
     conn.close()
-    print("✅ PostgreSQL inicializado com sucesso!", file=sys.stderr); sys.stderr.flush()
+    print("✅ PostgreSQL initialized successfully!", file=sys.stderr); sys.stderr.flush()
 
 def init_sqlite():
-    """Inicializa banco SQLite"""
-    print("✨ Inicializando SQLite...", file=sys.stderr); sys.stderr.flush()
+    """Initializes SQLite database"""
+    print("✨ Initializing SQLite...", file=sys.stderr); sys.stderr.flush()
+    db_path = "obra_database.db"
+    # Delete existing SQLite DB file to force a clean start
+    if os.path.exists(db_path):
+        os.remove(db_path)
+        print(f"Deleted existing SQLite DB: {db_path}", file=sys.stderr); sys.stderr.flush()
+
     conn = get_sqlite_connection()
     cursor = conn.cursor()
     
-    # Tabela de usuários (com 'ativo' como INTEGER e 'updated_at')
+    # Users table ('active' as INTEGER and 'updated_at')
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -212,7 +237,7 @@ def init_sqlite():
         )
     """)
     
-    # Tabela de categorias
+    # Categories table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -225,7 +250,7 @@ def init_sqlite():
         )
     """)
     
-    # Tabela de lançamentos
+    # Entries table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS lancamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -242,7 +267,7 @@ def init_sqlite():
         )
     """)
     
-    # Tabela de arquivos
+    # Files table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS arquivos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -259,7 +284,7 @@ def init_sqlite():
         )
     """)
     
-    # Tabela de configurações da obra
+    # Project config table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS obra_config (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -274,7 +299,7 @@ def init_sqlite():
     
     conn.commit()
     conn.close()
-    print("✅ SQLite inicializado com sucesso!", file=sys.stderr); sys.stderr.flush()
+    print("✅ SQLite initialized successfully!", file=sys.stderr); sys.stderr.flush()
 
 if __name__ == "__main__":
     init_db()
