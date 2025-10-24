@@ -1,30 +1,29 @@
 #!/usr/bin/env python3
 """
-Script para inicializar o banco de dados no Render
+Script para inicializar o banco de dados
+Execute: python init_db.py
 """
+
 import sys
 import os
 
-# Adicionar o diretório src ao path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+# Adiciona o diretório atual ao path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from config.database import init_db
-from modules.auth import create_first_user
 
 if __name__ == "__main__":
-    print("🚀 Inicializando banco de dados no Render...")
+    print("🔧 Inicializando banco de dados...")
     
     try:
-        # Inicializar tabelas
         init_db()
-        print("✅ Tabelas criadas!")
-        
-        # Criar usuário padrão
-        create_first_user()
-        print("✅ Usuário padrão criado!")
-        
-        print("🎉 Inicialização completa!")
+        print("✅ Banco de dados inicializado com sucesso!")
+        print("\n📋 Próximos passos:")
+        print("1. Execute: streamlit run app.py")
+        print("2. Acesse o sistema no navegador")
+        print("3. Clique em 'Inicializar Sistema' se for o primeiro acesso")
+        print("4. Use: deverson@obra.com / 123456 para login")
         
     except Exception as e:
-        print(f"❌ Erro na inicialização: {e}")
+        print(f"❌ Erro ao inicializar banco: {repr(e)}")
         sys.exit(1)

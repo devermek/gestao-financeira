@@ -2,99 +2,165 @@ import streamlit as st
 import sys
 import os
 
-# Adicionar src ao path
-sys.path.append(os.path.dirname(__file__))
-
-from modules.auth import show_login_page, show_user_header, is_authenticated, get_current_user
-from modules.dashboard import show_dashboard
-from modules.lancamentos import show_lancamentos
-from modules.relatorios import show_relatorios
-from modules.configuracoes import show_configuracoes
-from utils.helpers import get_obra_config, format_currency_br # Importar format_currency_br para uso na sidebar
-from utils.styles import load_css # Importar a função para carregar CSS
-
-# Configuração da página - REMOVIDO ARGUMENTO 'theme'
+# Configuração da página (deve ser a primeira chamada Streamlit)
 st.set_page_config(
-    page_title="Sistema de Gestão de Obras",
+    page_title="Sistema de Gestão Financeira - Obras",
     page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Carregar CSS personalizado (agora ele é o ÚNICO responsável pelo tema escuro)
-load_css()
+# Adiciona o diretório raiz ao path para imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Verificar autenticação
-if not is_authenticated():
-    show_login_page()
-else:
-    # Usuário autenticado - OBTER DADOS NECESSÁRIOS
-    user = get_current_user()
+# Imports dos módulos
+from utils.styles import load_css
+from modules.auth import check_authentication, show_login_page, show_user_header, logout
+from modules.dashboard import show_dashboard
+from modules.lancamentos import show_lancamentos
+from modules.relatorios import show_relatorios
+from modules.configuracoes import show_configuracoes
+
+def main():
+    """Função principal da aplicação"""
     
-    # --- NOVO: Tratamento defensivo para obra_config ---
-    obra_config_raw = get_obra_config()
-    if not isinstance(obra_config_raw, dict):
-        st.error(f"❌ Erro crítico: A configuração da obra não retornou um dicionário. Tipo retornado: {type(obra_config_raw)}")
-        st.info("Verifique os logs do Render para mais detalhes. Reinicialize o DB se necessário.")
-        st.stop() # Interrompe a execução para evitar o erro de atributo
-    obra_config = obra_config_raw
-    # --- FIM NOVO ---
+    # Carrega estilos CSS
+    load_css()
     
-    # Converter user para dict se necessário (compatibilidade PostgreSQL)
-    if hasattr(user, 'to_dict'):
-        user = user.to_dict()
+    # Verifica autenticação
+    if not check_authentication():
+        show_login_page()
+        return
     
-    # Cabeçalho do usuário
+    # Interface principal para usuários autenticados
+    show_main_interface()
+
+def show_main_interface():
+    """Interface principal do sistema"""
+    
+    # Cabeçalho com informações do usuário
     show_user_header()
     
-    # Sidebar de navegação
-    st.sidebar.title("🏗️ Menu Principal")
-    
-    # === SIMPLIFICAÇÃO: Remover lógica de tipo de usuário para o menu ===
-    menu_options = {
-        "📊 Dashboard": "dashboard",
-        "💰 Lançamentos": "lancamentos", 
-        "📈 Relatórios": "relatorios",
-        "⚙️ Configurações": "configuracoes"
-    }
-    # === FIM DA SIMPLIFICAÇÃO ===
-    
-    # Seleção da página
-    selected_page = st.sidebar.selectbox(
-        "Selecione uma opção:",
-        options=list(menu_options.keys()),
-        key="main_menu"
-    )
-    
-    # Informações da obra na sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### ��️ Informações da Obra")
-    if obra_config and obra_config.get('nome_obra'):
-        st.sidebar.info(f"**{obra_config['nome_obra']}**")
+    # Sidebar com navegação
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("### 🧭 Navegação")
         
-        # GARANTIR QUE ORÇAMENTO SEJA NÚMERO ANTES DE FORMATAR
-        orcamento = obra_config.get('orcamento_total', 0.0)
-        try:
-            orcamento = float(orcamento) # Converte para float, caso seja string ou Decimal
-        except (ValueError, TypeError):
-            orcamento = 0.0 # Define como 0.0 se a conversão falhar
+        # Menu de navegação
+        page = st.selectbox(
+            "Selecione uma página:",
+            options=[
+                "📊 Dashboard",
+                "💰 Lançamentos", 
+                "📈 Relatórios",
+                "⚙️ Configurações"
+            ],
+            index=0
+        )
+        
+        st.markdown("---")
+        
+        # Informações do sistema
+        st.markdown("### ℹ️ Sistema")
+        st.caption("🏗️ **Gestão Financeira de Obras**")
+        st.caption("📱 **Versão:** 1.0.0")
+        st.caption("👨‍💻 **Desenvolvido por:** Deverson")
+        
+        st.markdown("---")
+        
+        # Botão de logout
+        if st.button("🚪 Sair do Sistema", use_container_width=True):
+            logout()
+        
+        # Links úteis
+        st.markdown("---")
+        st.markdown("### 🔗 Links Úteis")
+        st.markdown("📚 [Documentação](https://github.com)", unsafe_allow_html=True)
+        st.markdown("🐛 [Reportar Bug](https://github.com)", unsafe_allow_html=True)
+        st.markdown("💡 [Sugestões](https://github.com)", unsafe_allow_html=True)
+    
+    # Container principal
+    with st.container():
+        # Roteamento de páginas
+        if page == "📊 Dashboard":
+            show_dashboard()
+        elif page == "💰 Lançamentos":
+            show_lancamentos()
+        elif page == "�� Relatórios":
+            show_relatorios()
+        elif page == "⚙️ Configurações":
+            show_configuracoes()
+    
+    # Footer
+    show_footer()
 
-        st.sidebar.metric("💰 Orçamento", format_currency_br(orcamento)) # Usando a função format_currency_br
-    else:
-        st.sidebar.warning("Configure a obra primeiro")
+def show_footer():
+    """Exibe rodapé da aplicação"""
+    st.markdown("---")
     
-    # Roteamento das páginas - PASSAR OS ARGUMENTOS CORRETOS
-    page_key = menu_options[selected_page]
+    col1, col2, col3 = st.columns(3)
     
+    with col1:
+        st.markdown("### 🏗️ Sistema de Gestão Financeira")
+        st.caption("Controle completo dos gastos da sua obra")
+    
+    with col2:
+        st.markdown("### 📊 Funcionalidades")
+        st.caption("✅ Dashboard interativo")
+        st.caption("✅ Controle de lançamentos")
+        st.caption("✅ Upload de comprovantes")
+        st.caption("✅ Relatórios detalhados")
+    
+    with col3:
+        st.markdown("### 🔧 Suporte")
+        st.caption("📧 suporte@sistema.com")
+        st.caption("📱 (11) 99999-9999")
+        st.caption("🌐 www.sistema.com")
+    
+    # Copyright
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align: center; color: #888; font-size: 0.8em;'>"
+        "© 2024 Sistema de Gestão Financeira para Obras. Todos os direitos reservados."
+        "</div>",
+        unsafe_allow_html=True
+    )
+
+def init_session_state():
+    """Inicializa variáveis de sessão"""
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if 'user' not in st.session_state:
+        st.session_state.user = None
+    
+    # Outras variáveis de sessão conforme necessário
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = "Dashboard"
+
+def handle_errors():
+    """Manipulador global de erros"""
     try:
-        if page_key == "dashboard":
-            show_dashboard(user, obra_config)
-        elif page_key == "lancamentos":
-            show_lancamentos(user)
-        elif page_key == "relatorios":
-            show_relatorios(user, obra_config)
-        elif page_key == "configuracoes":
-            show_configuracoes(user, obra_config)
+        main()
     except Exception as e:
-        st.error(f"❌ Erro ao carregar a página: {e}")
-        st.info("🔄 Tente recarregar a página ou entre em contato com o suporte.")
+        st.error("🚨 Ocorreu um erro inesperado no sistema!")
+        
+        # Em desenvolvimento, mostra detalhes do erro
+        if os.getenv('DEBUG', 'False').lower() == 'true':
+            st.exception(e)
+        else:
+            st.info("Por favor, recarregue a página ou entre em contato com o suporte.")
+        
+        # Log do erro
+        print(f"Erro na aplicação: {repr(e)}", file=sys.stderr)
+        
+        # Botão para recarregar
+        if st.button("🔄 Recarregar Página"):
+            st.rerun()
+
+if __name__ == "__main__":
+    # Inicializa estado da sessão
+    init_session_state()
+    
+    # Executa aplicação com tratamento de erros
+    handle_errors()
