@@ -1,7 +1,7 @@
 import streamlit as st
 
 def load_css():
-    """Carrega estilos CSS personalizados - Tema Escuro Forçado"""
+    """Carrega estilos CSS personalizados - Tema Escuro Forçado e Visibilidade Garantida"""
     st.markdown("""
     <style>
         /* Importar fonte do Google */
@@ -27,7 +27,8 @@ def load_css():
             background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%) !important;
             color: #ffffff !important;
         }
-        [data-testid="stSidebar"] *, .css-1d391kg *, .st-emotion-cache-l9rwms * { /* Aplica a todos os elementos dentro da sidebar */
+        /* Aplica cor branca a TODOS os elementos dentro da sidebar, exceto métricas */
+        [data-testid="stSidebar"] *, .css-1d391kg *, .st-emotion-cache-l9rwms * { 
             color: #ffffff !important;
         }
         
@@ -257,14 +258,13 @@ def load_css():
             margin: 1rem 0 !important;
         }
         
-        /* Custom Inputs */
+        /* Custom Inputs (Base styling) */
         .stTextInput > div > div > input,
         .stNumberInput > div > div > input,
         .stTextArea > div > div > textarea,
         .stDateInput > div > div > input {
             background-color: #2c3e50 !important;
             border: 2px solid #3498db !important;
-            color: #ecf0f1 !important;
             border-radius: 8px !important;
             padding: 0.75rem !important;
             font-size: 1rem !important;
@@ -273,16 +273,19 @@ def load_css():
         }
 
         /* Custom Selectbox - Displayed value and dropdown list */
-        [data-testid^="stSelectbox"] > div:first-child > div:first-child,
-        [data-baseweb="popover"] > div > div[role="listbox"] {
+        [data-testid^="stSelectbox"] > div:first-child > div:first-child, /* O valor exibido */
+        [data-baseweb="popover"] > div > div[role="listbox"] /* A lista de opções */ {
             background-color: #2c3e50 !important; 
             border: 2px solid #3498db !important;
-            color: #ecf0f1 !important;
             border-radius: 8px !important;
         }
         /* Texto dentro do selectbox exibido */
         [data-testid^="stSelectbox"] > div:first-child > div:first-child > div:first-child {
-            color: #ecf0f1 !important;
+            color: #ecf0f1 !important; /* COR BRANCA/CINZA CLARO PARA O TEXTO EXIBIDO DO SELECTBOX */
+        }
+        /* Texto dentro dos inputs */
+        .stTextInput input, .stNumberInput input, .stTextArea textarea, .stDateInput input {
+            color: #ecf0f1 !important; /* COR BRANCA/CINZA CLARO PARA O TEXTO DIGITADO NOS INPUTS */
         }
 
         /* Opções individuais dentro do dropdown */

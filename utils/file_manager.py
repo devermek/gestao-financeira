@@ -294,4 +294,4 @@ def show_file_gallery(lancamento_id, user_id, user_tipo):
                     if st.button("��️ Deletar", key=f"delete_doc_{doc_file[0]}_{idx_doc}"): # Unique key
                         success, message = FileManager.delete_file(doc_file[0], user_id)
                         if success: st.success(message); st.rerun()
-                        else: st.error(message)
+                        else: st.error(message) 
