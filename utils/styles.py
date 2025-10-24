@@ -1,400 +1,309 @@
 import streamlit as st
 
 def load_css():
-    """Carrega CSS personalizado para tema escuro"""
-    css = """
+    """Carrega estilos CSS customizados"""
+    st.markdown("""
     <style>
-    /* Importa fonte do Google */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Reset e configurações globais */
-    .stApp {
-        background-color: #0e1117 !important;
-        color: #fafafa !important;
-        font-family: 'Inter', sans-serif !important;
-    }
-    
-    /* Sidebar */
-    .css-1d391kg, .css-1cypcdb {
-        background-color: #262730 !important;
-    }
-    
-    /* Containers principais */
+    /* Reset e configurações gerais */
     .main .block-container {
-        background-color: #0e1117 !important;
-        color: #fafafa !important;
-        padding-top: 2rem !important;
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        max-width: 100%;
     }
     
-    /* Headers */
-    h1, h2, h3, h4, h5, h6 {
-        color: #fafafa !important;
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 600 !important;
+    /* Sidebar styling */
+    .css-1d391kg {
+        background-color: #f8f9fa !important;
     }
     
-    /* Texto geral */
-    p, div, span, label {
-        color: #fafafa !important;
-        font-family: 'Inter', sans-serif !important;
+    .sidebar .sidebar-content {
+        background-color: #f8f9fa !important;
+        color: #333 !important;
     }
     
-    /* Inputs de texto */
-    .stTextInput > div > div > input {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border: 1px solid #404040 !important;
-        border-radius: 8px !important;
-        font-family: 'Inter', sans-serif !important;
+    /* Força cor do texto na sidebar */
+    .sidebar .sidebar-content * {
+        color: #333 !important;
     }
     
-    .stTextInput > div > div > input:focus {
-        border-color: #1f77b4 !important;
-        box-shadow: 0 0 0 2px rgba(31, 119, 180, 0.2) !important;
+    .sidebar .sidebar-content .stSelectbox label {
+        color: #333 !important;
+        font-weight: bold !important;
+        font-size: 14px !important;
     }
     
-    /* Text areas */
-    .stTextArea > div > div > textarea {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border: 1px solid #404040 !important;
-        border-radius: 8px !important;
-        font-family: 'Inter', sans-serif !important;
+    .sidebar .sidebar-content .stSelectbox > div > div {
+        background-color: white !important;
+        color: #333 !important;
+        border: 1px solid #ddd !important;
     }
     
-    .stTextArea > div > div > textarea:focus {
-        border-color: #1f77b4 !important;
-        box-shadow: 0 0 0 2px rgba(31, 119, 180, 0.2) !important;
-    }
-    
-    /* Number inputs */
-    .stNumberInput > div > div > input {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border: 1px solid #404040 !important;
-        border-radius: 8px !important;
-        font-family: 'Inter', sans-serif !important;
-    }
-    
-    .stNumberInput > div > div > input:focus {
-        border-color: #1f77b4 !important;
-        box-shadow: 0 0 0 2px rgba(31, 119, 180, 0.2) !important;
-    }
-    
-    /* Date inputs */
-    .stDateInput > div > div > input {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border: 1px solid #404040 !important;
-        border-radius: 8px !important;
-        font-family: 'Inter', sans-serif !important;
-    }
-    
-    .stDateInput > div > div > input:focus {
-        border-color: #1f77b4 !important;
-        box-shadow: 0 0 0 2px rgba(31, 119, 180, 0.2) !important;
-    }
-    
-    /* Selectbox */
-    .stSelectbox > div > div > select {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border: 1px solid #404040 !important;
-        border-radius: 8px !important;
-        font-family: 'Inter', sans-serif !important;
-    }
-    
-    .stSelectbox > div > div > div {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border: 1px solid #404040 !important;
-        border-radius: 8px !important;
-    }
-    
-    /* Multiselect */
-    .stMultiSelect > div > div > div {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border: 1px solid #404040 !important;
-        border-radius: 8px !important;
-    }
-    
-    /* Botões */
-    .stButton > button {
-        background-color: #1f77b4 !important;
+    .sidebar .sidebar-content .stButton button {
+        background-color: #007bff !important;
         color: white !important;
         border: none !important;
-        border-radius: 8px !important;
-        padding: 0.5rem 1rem !important;
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 500 !important;
-        transition: all 0.3s ease !important;
+        border-radius: 5px !important;
+        font-weight: bold !important;
+    }
+    
+    .sidebar .sidebar-content .stButton button:hover {
+        background-color: #0056b3 !important;
+    }
+    
+    /* Cards personalizados */
+    .card-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        margin: 1rem 0;
+        color: white;
+    }
+    
+    .metric-card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-left: 4px solid #007bff;
+        margin: 0.5rem 0;
+    }
+    
+    .metric-card h3 {
+        color: #333;
+        margin: 0 0 0.5rem 0;
+        font-size: 1.1rem;
+    }
+    
+    .metric-card .metric-value {
+        color: #007bff;
+        font-size: 2rem;
+        font-weight: bold;
+        margin: 0;
+    }
+    
+    /* Botões customizados */
+    .stButton > button {
+        background: linear-gradient(90deg, #007bff, #0056b3);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
     
     .stButton > button:hover {
-        background-color: #1565c0 !important;
-        box-shadow: 0 4px 8px rgba(31, 119, 180, 0.3) !important;
-        transform: translateY(-1px) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        background: linear-gradient(90deg, #0056b3, #004085);
     }
     
-    .stButton > button:active {
-        transform: translateY(0) !important;
+    /* Formulários */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stSelectbox > div > div > select,
+    .stNumberInput > div > div > input {
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        padding: 0.75rem;
+        font-size: 1rem;
+        transition: border-color 0.3s ease;
     }
     
-    /* Botões secundários */
-    .stButton > button[kind="secondary"] {
-        background-color: #404040 !important;
-        color: #fafafa !important;
-        border: 1px solid #606060 !important;
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus,
+    .stSelectbox > div > div > select:focus,
+    .stNumberInput > div > div > input:focus {
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
     }
     
-    .stButton > button[kind="secondary"]:hover {
-        background-color: #505050 !important;
+    /* Tabelas */
+    .dataframe {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     
-    /* File uploader */
-    .stFileUploader > div > div {
-        background-color: #262730 !important;
-        border: 2px dashed #404040 !important;
-        border-radius: 8px !important;
-        color: #fafafa !important;
-    }
-    
-    .stFileUploader > div > div:hover {
-        border-color: #1f77b4 !important;
-    }
-    
-    /* Métricas */
-    .metric-container {
-        background-color: #1e1e1e !important;
-        padding: 1rem !important;
-        border-radius: 8px !important;
-        border: 1px solid #404040 !important;
-        margin: 0.5rem 0 !important;
-    }
-    
-    div[data-testid="metric-container"] {
-        background-color: #1e1e1e !important;
-        border: 1px solid #404040 !important;
-        padding: 1rem !important;
-        border-radius: 8px !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-    }
-    
-    div[data-testid="metric-container"] > div {
-        color: #fafafa !important;
-    }
-    
-    /* Alertas e mensagens */
-    .stAlert {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border-radius: 8px !important;
-        border-left: 4px solid #1f77b4 !important;
-    }
-    
-    .stSuccess {
-        background-color: #1b4332 !important;
-        color: #d1e7dd !important;
-        border-left-color: #198754 !important;
-    }
-    
-    .stWarning {
-        background-color: #664d03 !important;
-        color: #fff3cd !important;
-        border-left-color: #ffc107 !important;
-    }
-    
-    .stError {
-        background-color: #58151c !important;
-        color: #f8d7da !important;
-        border-left-color: #dc3545 !important;
-    }
-    
-    .stInfo {
-        background-color: #055160 !important;
-        color: #b6effb !important;
-        border-left-color: #0dcaf0 !important;
-    }
-    
-    /* Expander */
-    .streamlit-expanderHeader {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border-radius: 8px !important;
-        border: 1px solid #404040 !important;
-    }
-    
-    .streamlit-expanderContent {
-        background-color: #1e1e1e !important;
-        color: #fafafa !important;
-        border: 1px solid #404040 !important;
-        border-top: none !important;
-        border-radius: 0 0 8px 8px !important;
-    }
-    
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        background-color: #262730 !important;
-        border-radius: 8px !important;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background-color: transparent !important;
-        color: #fafafa !important;
-        border-radius: 8px !important;
-        font-family: 'Inter', sans-serif !important;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #1f77b4 !important;
-        color: white !important;
-    }
-    
-    /* Dataframe */
-    .stDataFrame {
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border-radius: 8px !important;
-    }
-    
-    /* Checkbox e Radio */
-    .stCheckbox > label {
-        color: #fafafa !important;
-        font-family: 'Inter', sans-serif !important;
-    }
-    
-    .stRadio > label {
-        color: #fafafa !important;
-        font-family: 'Inter', sans-serif !important;
-    }
-    
-    /* Slider */
-    .stSlider > div > div > div {
-        background-color: #404040 !important;
-    }
-    
-    /* Sidebar específico */
-    .css-1d391kg .stSelectbox > div > div {
-        background-color: #1e1e1e !important;
-        color: #fafafa !important;
-        border: 1px solid #404040 !important;
-    }
-    
-    .css-1d391kg .stButton > button {
-        background-color: #1f77b4 !important;
-        color: white !important;
-        width: 100% !important;
-        margin: 0.25rem 0 !important;
-    }
-    
-    /* Scrollbar personalizada */
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #262730;
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: #404040;
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: #505050;
-    }
-    
-    /* Links */
-    a {
-        color: #1f77b4 !important;
-        text-decoration: none !important;
-    }
-    
-    a:hover {
-        color: #1565c0 !important;
-        text-decoration: underline !important;
-    }
-    
-    /* Tabelas customizadas */
     .data-table {
         width: 100%;
         border-collapse: collapse;
-        background-color: #262730 !important;
-        color: #fafafa !important;
-        border-radius: 8px !important;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+        border-radius: 10px;
         overflow: hidden;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
     
-    .data-table th {
-        background-color: #1f77b4 !important;
-        color: white !important;
-        padding: 12px !important;
-        text-align: left !important;
+    .data-table thead th {
+        background: linear-gradient(90deg, #007bff, #0056b3);
+        color: white;
+        font-weight: bold;
+        padding: 12px 15px;
+        text-align: left;
+        border: none;
+    }
+    
+    .data-table tbody td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #e9ecef;
+        background: white;
+    }
+    
+    .data-table tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .data-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    
+    /* Alertas e notificações */
+    .stAlert {
+        border-radius: 10px;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Métricas do Streamlit */
+    [data-testid="metric-container"] {
+        background: white;
+        border: 1px solid #e9ecef;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        border-left: 4px solid #007bff;
+    }
+    
+    [data-testid="metric-container"] > label {
+        color: #6c757d !important;
+        font-size: 0.875rem !important;
         font-weight: 600 !important;
-        font-family: 'Inter', sans-serif !important;
     }
     
-    .data-table td {
-        padding: 12px !important;
-        border-bottom: 1px solid #404040 !important;
-        font-family: 'Inter', sans-serif !important;
+    [data-testid="metric-container"] > div {
+        color: #007bff !important;
+        font-size: 1.5rem !important;
+        font-weight: bold !important;
     }
     
-    .data-table tr:hover {
-        background-color: #1e1e1e !important;
+    /* Progress bar */
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, #28a745, #20c997);
     }
     
-    .data-table tr:last-child td {
-        border-bottom: none !important;
+    /* Expanders */
+    .streamlit-expanderHeader {
+        background: linear-gradient(90deg, #f8f9fa, #e9ecef);
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+    
+    /* File uploader */
+    .stFileUploader > div {
+        border: 2px dashed #007bff;
+        border-radius: 10px;
+        background: #f8f9ff;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    /* Responsividade para mobile */
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        
+        .card-container {
+            padding: 1rem;
+            margin: 0.5rem 0;
+        }
+        
+        .metric-card {
+            padding: 1rem;
+        }
+        
+        .metric-card .metric-value {
+            font-size: 1.5rem;
+        }
+        
+        /* Força sidebar visível em mobile */
+        .css-1d391kg {
+            width: 100% !important;
+            min-width: 100% !important;
+        }
+        
+        /* Botões maiores em mobile */
+        .stButton > button {
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            width: 100%;
+        }
+    }
+    
+    /* Correções específicas para sidebar */
+    .css-1d391kg .sidebar-content {
+        color: #333 !important;
+    }
+    
+    .css-1d391kg .sidebar-content h1,
+    .css-1d391kg .sidebar-content h2,
+    .css-1d391kg .sidebar-content h3,
+    .css-1d391kg .sidebar-content h4,
+    .css-1d391kg .sidebar-content h5,
+    .css-1d391kg .sidebar-content h6,
+    .css-1d391kg .sidebar-content p,
+    .css-1d391kg .sidebar-content span,
+    .css-1d391kg .sidebar-content div,
+    .css-1d391kg .sidebar-content label {
+        color: #333 !important;
+    }
+    
+    /* Força cor escura no selectbox */
+    .css-1d391kg .stSelectbox label {
+        color: #333 !important;
+        font-weight: bold !important;
+    }
+    
+    .css-1d391kg .stSelectbox > div > div {
+        background-color: white !important;
+        color: #333 !important;
     }
     
     /* Animações suaves */
     * {
-        transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease !important;
+        transition: all 0.3s ease;
     }
     
-    /* Remove outline padrão e adiciona focus customizado */
-    *:focus {
-        outline: none !important;
+    /* Esconde elementos desnecessários */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Melhora contraste */
+    .stMarkdown {
+        color: #333;
     }
     
-    /* Melhora a aparência dos elementos de formulário */
-    .stForm {
-        background-color: #1e1e1e !important;
-        padding: 1.5rem !important;
-        border-radius: 12px !important;
-        border: 1px solid #404040 !important;
-        margin: 1rem 0 !important;
+    /* Força visibilidade do texto */
+    .sidebar .sidebar-content .stMarkdown {
+        color: #333 !important;
     }
     
-    /* Estilo para containers de cards */
-    .card-container {
-        background-color: #1e1e1e !important;
-        padding: 1.5rem !important;
-        border-radius: 12px !important;
-        border: 1px solid #404040 !important;
-        margin: 1rem 0 !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-    }
-    
-    /* Responsividade */
-    @media (max-width: 768px) {
-        .main .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-        }
-        
-        .stButton > button {
-            width: 100% !important;
-            margin: 0.5rem 0 !important;
-        }
+    .sidebar .sidebar-content .stMarkdown h1,
+    .sidebar .sidebar-content .stMarkdown h2,
+    .sidebar .sidebar-content .stMarkdown h3,
+    .sidebar .sidebar-content .stMarkdown h4,
+    .sidebar .sidebar-content .stMarkdown h5,
+    .sidebar .sidebar-content .stMarkdown h6,
+    .sidebar .sidebar-content .stMarkdown p,
+    .sidebar .sidebar-content .stMarkdown span,
+    .sidebar .sidebar-content .stMarkdown div,
+    .sidebar .sidebar-content .stMarkdown strong {
+        color: #333 !important;
     }
     </style>
-    """
-    
-    st.markdown(css, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)

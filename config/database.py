@@ -51,39 +51,16 @@ def init_db():
         
         print(f"Inicializando banco de dados ({'PostgreSQL' if is_postgres else 'SQLite'})...", file=sys.stderr)
         
-        # Para desenvolvimento: limpa banco se necessário
-        if not is_postgres:
-            # SQLite - remove arquivo se existir para reset completo
-            if os.path.exists('obra_financeira.db'):
-                conn.close()
-                os.remove('obra_financeira.db')
-                print("Banco SQLite anterior removido para reset", file=sys.stderr)
-                conn = get_connection()
-                cursor = conn.cursor()
-        
-        # Verifica se as tabelas já existem (PostgreSQL)
         if is_postgres:
-            cursor.execute("""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' AND table_name = 'usuarios'
-            """)
+            # PostgreSQL - Auto-migração
+            print("Executando auto-migração PostgreSQL...", file=sys.stderr)
             
-            if cursor.fetchone():
-                print("⚠️ Tabelas já existem no PostgreSQL. Use o script migrate_db.py para resetar.", file=sys.stderr)
-                return
-        
-        # Cria tabelas
-        if is_postgres:
-            # PostgreSQL - Produção
-            print("Criando tabelas PostgreSQL...", file=sys.stderr)
-            
-            # Remove tabelas se existirem (para reset)
+            # Remove tabelas se existirem (para reset completo)
             tables_to_drop = ['arquivos', 'lancamentos', 'categorias', 'obras', 'usuarios']
             for table in tables_to_drop:
                 cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
             
-            # Tabela de usuários
+            # Tabela de usuarios
             cursor.execute("""
                 CREATE TABLE usuarios (
                     id SERIAL PRIMARY KEY,
@@ -180,10 +157,10 @@ def init_db():
             cursor.execute("CREATE INDEX idx_usuarios_email ON usuarios(email);")
             
         else:
-            # SQLite - Desenvolvimento (mantém como estava)
+            # SQLite - Desenvolvimento
             print("Criando tabelas SQLite...", file=sys.stderr)
             
-            # Tabela de usuários
+            # Tabela de usuarios
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS usuarios (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -280,7 +257,7 @@ def init_db():
     finally:
         cursor.close()
         conn.close()
-        
+
 def test_connection():
     """Testa a conexão com o banco de dados"""
     try:
@@ -304,122 +281,3 @@ def test_connection():
     except Exception as e:
         print(f"❌ Erro ao testar conexão: {repr(e)}", file=sys.stderr)
         return False
-
-def reset_database():
-    """Reseta completamente o banco de dados (CUIDADO!)"""
-    try:
-        is_postgres = os.getenv('DATABASE_URL') is not None
-        
-        if is_postgres:
-            print("⚠️ Reset não implementado para PostgreSQL por segurança", file=sys.stderr)
-            return False
-        else:
-            # SQLite - remove arquivo
-            if os.path.exists('obra_financeira.db'):
-                os.remove('obra_financeira.db')
-                print("✅ Banco SQLite resetado", file=sys.stderr)
-                return True
-            else:
-                print("ℹ️ Banco SQLite não existe", file=sys.stderr)
-                return True
-                
-    except Exception as e:
-        print(f"❌ Erro ao resetar banco: {repr(e)}", file=sys.stderr)
-        return False
-
-def get_database_info():
-    """Retorna informações sobre o banco de dados"""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        is_postgres = os.getenv('DATABASE_URL') is not None
-        
-        info = {
-            'tipo': 'PostgreSQL' if is_postgres else 'SQLite',
-            'tabelas': []
-        }
-        
-        if is_postgres:
-            # Lista tabelas PostgreSQL
-            cursor.execute("""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                ORDER BY table_name;
-            """)
-        else:
-            # Lista tabelas SQLite
-            cursor.execute("""
-                SELECT name 
-                FROM sqlite_master 
-                WHERE type='table' AND name NOT LIKE 'sqlite_%'
-                ORDER BY name;
-            """)
-        
-        info['tabelas'] = [row[0] for row in cursor.fetchall()]
-        
-        cursor.close()
-        conn.close()
-        
-        return info
-        
-    except Exception as e:
-        print(f"Erro ao obter informações do banco: {repr(e)}", file=sys.stderr)
-        return None
-
-def execute_query(query, params=None, fetch=True):
-    """Executa query de forma segura"""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        if params:
-            cursor.execute(query, params)
-        else:
-            cursor.execute(query)
-        
-        if fetch:
-            result = cursor.fetchall()
-        else:
-            result = cursor.rowcount
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        return result
-        
-    except Exception as e:
-        print(f"Erro ao executar query: {repr(e)}", file=sys.stderr)
-        if 'conn' in locals():
-            conn.rollback()
-            cursor.close()
-            conn.close()
-        return None
-
-# Função para migração de dados (se necessário)
-def migrate_data():
-    """Executa migrações de dados se necessário"""
-    try:
-        # Implementar migrações futuras aqui
-        print("ℹ️ Nenhuma migração necessária", file=sys.stderr)
-        return True
-        
-    except Exception as e:
-        print(f"Erro na migração: {repr(e)}", file=sys.stderr)
-        return False
-
-if __name__ == "__main__":
-    # Teste quando executado diretamente
-    print("🧪 Testando conexão com banco de dados...")
-    
-    if test_connection():
-        print("✅ Conexão OK!")
-        
-        info = get_database_info()
-        if info:
-            print(f"📊 Banco: {info['tipo']}")
-            print(f"📋 Tabelas: {', '.join(info['tabelas']) if info['tabelas'] else 'Nenhuma'}")
-    else:
-        print("❌ Falha na conexão!")

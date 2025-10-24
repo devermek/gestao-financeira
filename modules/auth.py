@@ -187,7 +187,7 @@ def create_first_user():
         **Dados criados:**
         - 👤 Usuário: deverson@obra.com / 123456
         - 🏷️ 10 categorias padrão
-        - 🏗️ Obra inicial com orçamento de R\$ 100.000,00
+        - 🏗️ Obra inicial com orçamento de R$ 100.000,00
         
         **Agora você pode fazer login!**
         """)
@@ -582,7 +582,7 @@ def _show_login_form():
                         **Dados criados:**
                         - 👤 Usuário: deverson@obra.com / 123456
                         - 🏷️ 10 categorias padrão
-                        - 🏗️ Obra inicial com orçamento de R\$ 100.000,00
+                        - 🏗️ Obra inicial com orçamento de R$ 100.000,00
                         
                         **Agora você pode fazer login!**
                         """)

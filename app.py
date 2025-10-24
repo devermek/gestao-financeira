@@ -15,11 +15,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Imports dos módulos
 from utils.styles import load_css
-from modules.auth import check_authentication, show_login_page, show_user_header, logout
 from modules.dashboard import show_dashboard
 from modules.lancamentos import show_lancamentos
 from modules.relatorios import show_relatorios
 from modules.configuracoes import show_configuracoes
+from config.database import init_db, test_connection
 
 def main():
     """Função principal da aplicação"""
@@ -27,68 +27,254 @@ def main():
     # Carrega estilos CSS
     load_css()
     
-    # Verifica autenticação
-    if not check_authentication():
-        show_login_page()
-        return
+    # Inicializa banco se necessário
+    init_system_if_needed()
     
-    # Interface principal para usuários autenticados
+    # Interface principal
     show_main_interface()
+
+def init_system_if_needed():
+    """Inicializa sistema automaticamente se necessário"""
+    try:
+        # Testa conexão
+        if not test_connection():
+            st.error("❌ Erro de conexão com banco de dados!")
+            return
+        
+        # Verifica se precisa inicializar
+        if is_first_run():
+            with st.spinner("🔧 Inicializando sistema pela primeira vez..."):
+                init_db()
+                create_initial_data()
+                st.success("✅ Sistema inicializado com sucesso!")
+                st.rerun()
+                
+    except Exception as e:
+        st.error(f"❌ Erro na inicialização: {str(e)}")
+        print(f"Erro na inicialização: {repr(e)}", file=sys.stderr)
+
+def is_first_run():
+    """Verifica se é a primeira execução"""
+    try:
+        from config.database import get_connection
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Verifica se existe tabela usuarios
+        import os
+        is_postgres = os.getenv('DATABASE_URL') is not None
+        
+        if is_postgres:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' AND table_name = 'usuarios'
+                );
+            """)
+        else:
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='usuarios';
+            """)
+        
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if is_postgres:
+            return not result[0]  # EXISTS retorna boolean
+        else:
+            return result is None  # sqlite retorna None se não existe
+            
+    except Exception as e:
+        print(f"Erro ao verificar primeira execução: {repr(e)}", file=sys.stderr)
+        return True
+
+def create_initial_data():
+    """Cria dados iniciais do sistema"""
+    try:
+        from config.database import get_connection
+        from datetime import date, timedelta
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        import os
+        is_postgres = os.getenv('DATABASE_URL') is not None
+        
+        # Cria categorias padrão
+        categorias_padrao = [
+            ("Material de Construção", "Materiais básicos como cimento, areia, brita", "#e74c3c"),
+            ("Mão de Obra", "Pagamentos de funcionários e prestadores", "#3498db"),
+            ("Ferramentas e Equipamentos", "Compra e aluguel de ferramentas", "#f39c12"),
+            ("Elétrica", "Material e serviços elétricos", "#9b59b6"),
+            ("Hidráulica", "Material e serviços hidráulicos", "#1abc9c"),
+            ("Acabamento", "Materiais de acabamento e pintura", "#34495e"),
+            ("Documentação", "Taxas, licenças e documentos", "#95a5a6"),
+            ("Transporte", "Fretes e transportes diversos", "#e67e22"),
+            ("Alimentação", "Alimentação da equipe", "#27ae60"),
+            ("Outros", "Gastos diversos não categorizados", "#7f8c8d")
+        ]
+        
+        for nome, descricao, cor in categorias_padrao:
+            if is_postgres:
+                cursor.execute("""
+                    INSERT INTO categorias (nome, descricao, cor, ativo)
+                    VALUES (%s, %s, %s, TRUE)
+                """, (nome, descricao, cor))
+            else:
+                cursor.execute("""
+                    INSERT INTO categorias (nome, descricao, cor, ativo)
+                    VALUES (?, ?, ?, 1)
+                """, (nome, descricao, cor))
+        
+        # Cria obra padrão
+        data_inicio = date.today()
+        data_fim = data_inicio + timedelta(days=365)
+        
+        if is_postgres:
+            cursor.execute("""
+                INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
+                VALUES (%s, %s, %s, %s, TRUE)
+            """, ("Minha Obra", 100000.00, data_inicio, data_fim))
+        else:
+            cursor.execute("""
+                INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
+                VALUES (?, ?, ?, ?, 1)
+            """, ("Minha Obra", 100000.00, data_inicio, data_fim))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        print("Dados iniciais criados com sucesso!", file=sys.stderr)
+        
+    except Exception as e:
+        print(f"Erro ao criar dados iniciais: {repr(e)}", file=sys.stderr)
+        raise
 
 def show_main_interface():
     """Interface principal do sistema"""
     
-    # Cabeçalho com informações do usuário
-    show_user_header()
+    # Cabeçalho principal
+    st.markdown("""
+    <div style="text-align: center; padding: 1rem 0; background: linear-gradient(90deg, #1f77b4, #2ca02c); color: white; border-radius: 10px; margin-bottom: 2rem;">
+        <h1 style="margin: 0;">🏗️ Sistema de Gestão Financeira</h1>
+        <p style="margin: 0; opacity: 0.9;">Controle completo dos gastos da sua obra</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Sidebar com navegação
     with st.sidebar:
-        st.markdown("---")
+        st.markdown("""
+        <style>
+        .sidebar-content {
+            color: #333 !important;
+        }
+        .sidebar-content .stSelectbox label {
+            color: #333 !important;
+            font-weight: bold !important;
+        }
+        .sidebar-content .stSelectbox > div > div {
+            background-color: white !important;
+            color: #333 !important;
+        }
+        </style>
+        <div class="sidebar-content">
+        """, unsafe_allow_html=True)
+        
         st.markdown("### 🧭 Navegação")
         
-        # Menu de navegação
-        page = st.selectbox(
+        # Menu de navegação com ícones mais visíveis
+        page_options = [
+            "📊 Dashboard",
+            "💰 Lançamentos", 
+            "📈 Relatórios",
+            "⚙️ Configurações"
+        ]
+        
+        # Usa session state para manter seleção
+        if 'current_page' not in st.session_state:
+            st.session_state.current_page = "📊 Dashboard"
+        
+        # Seletor de página
+        selected_page = st.selectbox(
             "Selecione uma página:",
-            options=[
-                "📊 Dashboard",
-                "💰 Lançamentos", 
-                "📈 Relatórios",
-                "⚙️ Configurações"
-            ],
-            index=0
+            options=page_options,
+            index=page_options.index(st.session_state.current_page) if st.session_state.current_page in page_options else 0,
+            key="page_selector"
         )
+        
+        # Atualiza session state
+        st.session_state.current_page = selected_page
+        
+        st.markdown("---")
+        
+        # Botões de navegação alternativos para mobile
+        st.markdown("### 📱 Navegação Rápida")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📊", help="Dashboard", use_container_width=True):
+                st.session_state.current_page = "📊 Dashboard"
+                st.rerun()
+            if st.button("💰", help="Lançamentos", use_container_width=True):
+                st.session_state.current_page = "💰 Lançamentos"
+                st.rerun()
+        
+        with col2:
+            if st.button("📈", help="Relatórios", use_container_width=True):
+                st.session_state.current_page = "📈 Relatórios"
+                st.rerun()
+            if st.button("⚙️", help="Configurações", use_container_width=True):
+                st.session_state.current_page = "⚙️ Configurações"
+                st.rerun()
         
         st.markdown("---")
         
         # Informações do sistema
         st.markdown("### ℹ️ Sistema")
-        st.caption("🏗️ **Gestão Financeira de Obras**")
-        st.caption("📱 **Versão:** 1.0.0")
-        st.caption("👨‍💻 **Desenvolvido por:** Deverson")
+        st.markdown("""
+        <div style="color: #333;">
+        🏗️ <strong>Gestão Financeira de Obras</strong><br>
+        📱 <strong>Versão:</strong> 1.0.0<br>
+        👨‍💻 <strong>Desenvolvido por:</strong> Deverson
+        </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("---")
         
-        # Botão de logout
-        if st.button("🚪 Sair do Sistema", use_container_width=True):
-            logout()
+        # Botão de reset/reinicialização
+        if st.button("🔄 Reinicializar Sistema", use_container_width=True, help="Limpa cache e reinicia"):
+            # Limpa session state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
         
         # Links úteis
-        st.markdown("---")
         st.markdown("### 🔗 Links Úteis")
-        st.markdown("📚 [Documentação](https://github.com)", unsafe_allow_html=True)
-        st.markdown("🐛 [Reportar Bug](https://github.com)", unsafe_allow_html=True)
-        st.markdown("💡 [Sugestões](https://github.com)", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="color: #333;">
+        📚 <a href="https://github.com"  style="color: #1f77b4;">Documentação</a><br>
+        🐛 <a href="https://github.com"  style="color: #1f77b4;">Reportar Bug</a><br>
+        💡 <a href="https://github.com"  style="color: #1f77b4;">Sugestões</a>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("</div>", unsafe_allow_html=True)
     
     # Container principal
     with st.container():
         # Roteamento de páginas
-        if page == "📊 Dashboard":
+        current_page = st.session_state.get('current_page', "📊 Dashboard")
+        
+        if current_page == "📊 Dashboard":
             show_dashboard()
-        elif page == "💰 Lançamentos":
+        elif current_page == "💰 Lançamentos":
             show_lancamentos()
-        elif page == "�� Relatórios":
+        elif current_page == "📈 Relatórios":
             show_relatorios()
-        elif page == "⚙️ Configurações":
+        elif current_page == "⚙️ Configurações":
             show_configuracoes()
     
     # Footer
@@ -105,7 +291,7 @@ def show_footer():
         st.caption("Controle completo dos gastos da sua obra")
     
     with col2:
-        st.markdown("### 📊 Funcionalidades")
+        st.markdown("### �� Funcionalidades")
         st.caption("✅ Dashboard interativo")
         st.caption("✅ Controle de lançamentos")
         st.caption("✅ Upload de comprovantes")
@@ -128,15 +314,14 @@ def show_footer():
 
 def init_session_state():
     """Inicializa variáveis de sessão"""
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    
-    if 'user' not in st.session_state:
-        st.session_state.user = None
-    
-    # Outras variáveis de sessão conforme necessário
     if 'current_page' not in st.session_state:
-        st.session_state.current_page = "Dashboard"
+        st.session_state.current_page = "📊 Dashboard"
+    
+    # Remove estados problemáticos se existirem
+    problematic_keys = ['show_user_config', 'editing_lancamento_', 'authenticated', 'user']
+    for key in list(st.session_state.keys()):
+        if any(prob_key in key for prob_key in problematic_keys):
+            del st.session_state[key]
 
 def handle_errors():
     """Manipulador global de erros"""
@@ -156,6 +341,9 @@ def handle_errors():
         
         # Botão para recarregar
         if st.button("🔄 Recarregar Página"):
+            # Limpa session state problemático
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.rerun()
 
 if __name__ == "__main__":
