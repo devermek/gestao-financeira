@@ -1,274 +1,279 @@
+import sys
 import streamlit as st
-import pandas as pd
-import hashlib
-from config.database import get_db_connection, init_db # Import init_db
-import sys # For sys.stderr
-
-def get_all_active_users():
-    """Retorna todos os usuários ativos"""
-    try:
-        conn, db_type = get_db_connection() # Get db_type
-        users = pd.read_sql_query("""
-            SELECT id, nome, email, tipo FROM usuarios 
-            WHERE ativo = 1 
-            ORDER BY nome
-        """, conn)
-        conn.close()
-        return users
-    except Exception as e:
-        print(f"Erro ao buscar usuários (get_all_active_users): {e}", file=sys.stderr); sys.stderr.flush()
-        return pd.DataFrame()
+from config.database import get_connection, init_db
 
 def authenticate_user(email, senha):
-    """Autentica usuário"""
+    """Autentica usuário no sistema"""
     try:
-        conn, db_type = get_db_connection() # Get db_type
-        senha_hash = hashlib.sha256(senha.encode()).hexdigest()
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        import os
+        is_postgres = os.getenv('DATABASE_URL') is not None
         
         query = """
-            SELECT id, nome, email, tipo FROM usuarios 
+            SELECT id, nome, email
+            FROM usuarios 
+            WHERE email = %s AND senha = %s AND ativo = TRUE
+        """ if is_postgres else """
+            SELECT id, nome, email
+            FROM usuarios 
             WHERE email = ? AND senha = ? AND ativo = 1
         """
-        params = [email, senha_hash]
-
-        if db_type == 'postgresql':
-            query = query.replace('?', '%s')
-            user = pd.read_sql_query(query, conn, params=tuple(params))
-        else: # sqlite
-            user = pd.read_sql_query(query, conn, params=params)
         
-        conn.close()
+        cursor.execute(query, (email, senha))
+        user = cursor.fetchone()
         
-        if not user.empty:
-            return user.iloc[0].to_dict()
+        if user:
+            return {
+                'id': user['id'],
+                'nome': user['nome'],
+                'email': user['email']
+            }
+        
         return None
+        
     except Exception as e:
-        print(f"Erro na autenticação: {e}", file=sys.stderr); sys.stderr.flush()
+        print(f"Erro na autenticação: {repr(e)}", file=sys.stderr)
         return None
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
 
-def show_user_header():
-    """Exibe cabeçalho com informações do usuário logado"""
-    if 'user' in st.session_state and st.session_state.user is not None:
-        user = st.session_state.user
+def create_first_user():
+    """Cria primeiro usuário e dados iniciais do sistema"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
         
-        if hasattr(user, 'to_dict'):
-            user = user.to_dict()
+        import os
+        is_postgres = os.getenv('DATABASE_URL') is not None
         
-        col1, col2, col3 = st.columns([3, 1, 1])
+        # Verifica se já existe usuário
+        cursor.execute("SELECT COUNT(*) FROM usuarios")
+        user_count = cursor.fetchone()[0]
         
-        with col1:
-            st.write(f"👋 Olá, **{user['nome']}** ({user['tipo'].title()})")
+        if user_count > 0:
+            st.info("Sistema já possui usuários cadastrados.")
+            return False
         
-        with col2:
-            st.write(f"📧 {user['email']}")
+        # Cria usuário padrão
+        if is_postgres:
+            cursor.execute("""
+                INSERT INTO usuarios (nome, email, senha, ativo)
+                VALUES (%s, %s, %s, %s)
+            """, ("Deverson", "deverson@obra.com", "123456", True))
+        else:
+            cursor.execute("""
+                INSERT INTO usuarios (nome, email, senha, ativo)
+                VALUES (?, ?, ?, ?)
+            """, ("Deverson", "deverson@obra.com", "123456", 1))
         
-        with col3:
-            if st.button("�� Sair", key="logout_button"): # Add a key to avoid duplicate widget error
-                logout()
+        # Cria categorias padrão
+        categorias_padrao = [
+            ("Material de Construção", "Materiais básicos como cimento, areia, brita", "#e74c3c"),
+            ("Mão de Obra", "Pagamentos de funcionários e prestadores", "#3498db"),
+            ("Ferramentas e Equipamentos", "Compra e aluguel de ferramentas", "#f39c12"),
+            ("Elétrica", "Material e serviços elétricos", "#9b59b6"),
+            ("Hidráulica", "Material e serviços hidráulicos", "#1abc9c"),
+            ("Acabamento", "Materiais de acabamento e pintura", "#34495e"),
+            ("Documentação", "Taxas, licenças e documentos", "#95a5a6"),
+            ("Transporte", "Fretes e transportes diversos", "#e67e22"),
+            ("Alimentação", "Alimentação da equipe", "#27ae60"),
+            ("Outros", "Gastos diversos não categorizados", "#7f8c8d")
+        ]
+        
+        for nome, descricao, cor in categorias_padrao:
+            if is_postgres:
+                cursor.execute("""
+                    INSERT INTO categorias (nome, descricao, cor, ativo)
+                    VALUES (%s, %s, %s, %s)
+                """, (nome, descricao, cor, True))
+            else:
+                cursor.execute("""
+                    INSERT INTO categorias (nome, descricao, cor, ativo)
+                    VALUES (?, ?, ?, ?)
+                """, (nome, descricao, cor, 1))
+        
+        # Cria obra padrão
+        from datetime import date, timedelta
+        
+        data_inicio = date.today()
+        data_fim = data_inicio + timedelta(days=365)  # 1 ano de duração
+        
+        if is_postgres:
+            cursor.execute("""
+                INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
+                VALUES (%s, %s, %s, %s, %s)
+            """, ("Minha Obra", 100000.00, data_inicio, data_fim, True))
+        else:
+            cursor.execute("""
+                INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
+                VALUES (?, ?, ?, ?, ?)
+            """, ("Minha Obra", 100000.00, data_inicio, data_fim, 1))
+        
+        conn.commit()
+        
+        st.success("✅ Sistema inicializado com sucesso!")
+        st.info("""
+        **Dados criados:**
+        - Usuário: deverson@obra.com / 123456
+        - 10 categorias padrão
+        - Obra inicial com orçamento de R\$ 100.000,00
+        
+        **Agora você pode fazer login!**
+        """)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Erro ao criar primeiro usuário: {repr(e)}", file=sys.stderr)
+        conn.rollback()
+        st.error(f"Erro ao inicializar sistema: {str(e)}")
+        return False
+    finally:
+        try:
+            cursor.close()
+            conn.close()
+        except:
+            pass
 
 def show_login_page():
     """Exibe página de login"""
-    st.title("🏗️ Sistema de Gestão de Obras")
-    st.subheader("Controle Financeiro Profissional")
+    st.markdown("""
+    <div style="text-align: center; padding: 2rem 0;">
+        <h1>🏗️ Sistema de Gestão Financeira</h1>
+        <h3>Controle Financeiro para Obras</h3>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Verificar se as tabelas existem e se há usuários
-    users = get_all_active_users()
+    # Container centralizado para login
+    col1, col2, col3 = st.columns([1, 2, 1])
     
-    if users.empty:
-        st.warning("⚠️ Banco de dados não inicializado ou sem usuários!")
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("🔧 Inicializar Banco de Dados e Criar Primeiro Usuário", type="primary"):
-                with st.spinner("Inicializando banco de dados..."):
-                    try:
-                        init_db() # Initializes tables
-                        create_first_user() # Creates a default gestor user and categories/config
-                        st.success("✅ Banco de dados inicializado e usuário padrão criado! Recarregue a página.")
-                        st.info("Para continuar, atualize a página. Se o problema persistir, limpe o cache do navegador.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Erro ao inicializar: {e}")
-                        print(f"Erro ao inicializar db na tela de login: {e}", file=sys.stderr); sys.stderr.flush()
-        with col2:
-            st.info("👆 Clique no botão para criar as tabelas do banco de dados e o primeiro usuário.")
-        return
-
-    # Se chegou aqui, o banco está OK e tem usuários
-    st.markdown("---")
-    st.markdown("### 🔒 Login")
-
-    with st.form("login_form"):
-        email = st.text_input("�� Email:")
-        senha = st.text_input("🔑 Senha:", type="password")
-        login_button = st.form_submit_button("Entrar", type="primary")
-
-        if login_button:
-            if email and senha:
-                user = authenticate_user(email, senha)
+    with col2:
+        with st.container():
+            st.markdown("""
+            <div class="card-container">
+            """, unsafe_allow_html=True)
+            
+            st.subheader("🔐 Login")
+            
+            with st.form("login_form"):
+                email = st.text_input("📧 Email", placeholder="seu@email.com")
+                senha = st.text_input("🔒 Senha", type="password", placeholder="Sua senha")
+                
+                col_login, col_init = st.columns(2)
+                
+                with col_login:
+                    login_button = st.form_submit_button("🚀 Entrar", use_container_width=True)
+                
+                with col_init:
+                    init_button = st.form_submit_button("🔧 Inicializar Sistema", use_container_width=True)
+            
+            # Botão de login rápido para desenvolvimento
+            if st.button("⚡ Login Rápido (Dev)", use_container_width=True):
+                user = authenticate_user("deverson@obra.com", "123456")
                 if user:
-                    st.session_state.user = user
                     st.session_state.authenticated = True
+                    st.session_state.user = user
+                    st.success("Login realizado com sucesso!")
                     st.rerun()
                 else:
-                    st.error("❌ Email ou senha incorretos.")
-            else:
-                st.warning("Por favor, preencha o email e a senha.")
-    
-    st.markdown("---")
-    _show_quick_login(users) # Pass users to quick login
-
-def _show_quick_login(users_df):
-    """Exibe login rápido, recebendo users_df como argumento"""
-    st.subheader("🚀 Login Rápido (Apenas para Gestores)") # Renomeado para maior clareza
-    
-    # Certifique-se que users_df não está vazio antes de tentar processá-lo
-    if users_df.empty:
-        st.warning("Nenhum usuário gestor encontrado para login rápido.")
-        return
-
-    # Filtrar apenas usuários do tipo 'gestor' para o login rápido
-    gestor_users = users_df[users_df['tipo'] == 'gestor']
-    
-    if gestor_users.empty:
-        st.warning("Nenhum usuário do tipo 'gestor' encontrado. Por favor, faça login com email/senha ou inicialize o banco de dados.")
-        return
-
-    user_options = ["Selecione um usuário..."]
-    user_data_map = {0: None} # Map index to user object
-
-    for idx, user_row in gestor_users.iterrows():
-        label = f"{user_row['nome']} ({user_row['tipo'].title()})"
-        user_options.append(label)
-        user_data_map[len(user_options) - 1] = user_row.to_dict() # Store as dict
-
-    selected_index = st.selectbox(
-        "Selecione seu usuário (Gestor):",
-        options=list(user_data_map.keys()),
-        format_func=lambda x: user_options[x],
-        key="quick_login_user"
-    )
-    
-    if selected_index > 0 and st.button("🚀 Entrar como Gestor", type="secondary"): # Changed button type to secondary
-        user = user_data_map[selected_index]
-        
-        st.session_state.user = user
-        st.session_state.authenticated = True
-        st.rerun()
-
-def create_first_user():
-    """Cria o primeiro usuário do sistema e dados iniciais"""
-    try:
-        conn, db_type = get_db_connection() # Get db_type
-        cursor = conn.cursor()
-        
-        try:
-            cursor.execute("SELECT COUNT(*) FROM usuarios")
-            count = cursor.fetchone()[0]
-        except Exception as e:
-            print(f"Erro ao contar usuários: {e}", file=sys.stderr); sys.stderr.flush()
-            count = 0
-        
-        if count == 0:
-            senha_hash = hashlib.sha256("123456".encode()).hexdigest()
-            query = """
-                INSERT INTO usuarios (nome, email, senha, tipo) 
-                VALUES (?, ?, ?, ?)
-            """
-            params = ("Deverson", "deverson@obra.com", senha_hash, "gestor")
-
-            if db_type == 'postgresql':
-                query = query.replace('?', '%s')
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query, params)
+                    st.error("Usuário padrão não encontrado. Inicialize o sistema primeiro.")
             
-            print("✅ Usuário padrão criado: deverson@obra.com / 123456")
-        
-        try:
-            cursor.execute("SELECT COUNT(*) FROM categorias")
-            cat_count = cursor.fetchone()[0]
-        except Exception as e:
-            print(f"Erro ao contar categorias: {e}", file=sys.stderr); sys.stderr.flush()
-            cat_count = 0
+            st.markdown("</div>", unsafe_allow_html=True)
             
-        if cat_count == 0:
-            categorias_padrao = [
-                ("Material de Construção", "Cimento, areia, brita, tijolos", 50000.00),
-                ("Mão de Obra", "Pedreiros, serventes, eletricistas", 30000.00),
-                ("Ferramentas", "Equipamentos e ferramentas", 5000.00),
-                ("Transporte", "Frete e transporte de materiais", 3000.00),
-                ("Diversos", "Gastos diversos da obra", 2000.00)
-            ]
-            
-            for nome, desc, orcamento in categorias_padrao:
-                query = """
-                    INSERT INTO categorias (nome, descricao, orcamento_previsto) 
-                    VALUES (?, ?, ?)
-                """
-                params = (nome, desc, orcamento)
-                if db_type == 'postgresql':
-                    query = query.replace('?', '%s')
-                    cursor.execute(query, params)
+            # Processa login
+            if login_button:
+                if not email or not senha:
+                    st.error("⚠️ Por favor, preencha email e senha.")
                 else:
-                    cursor.execute(query, params)
+                    user = authenticate_user(email, senha)
+                    if user:
+                        st.session_state.authenticated = True
+                        st.session_state.user = user
+                        st.success(f"✅ Bem-vindo, {user['nome']}!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Email ou senha incorretos.")
             
-            print("✅ Categorias padrão criadas!")
-        
-        try:
-            cursor.execute("SELECT COUNT(*) FROM obra_config")
-            obra_count = cursor.fetchone()[0]
-        except Exception as e:
-            print(f"Erro ao contar obra_config: {e}", file=sys.stderr); sys.stderr.flush()
-            obra_count = 0
-            
-        if obra_count == 0:
-            query = """
-                INSERT INTO obra_config (nome_obra, orcamento_total, data_inicio) 
-                VALUES (?, ?, DATE('now'))
-            """
-            params = ("Minha Obra", 90000.00)
-            if db_type == 'postgresql':
-                # DATE('now') for SQLite, CURRENT_DATE for PostgreSQL
-                query = query.replace("DATE('now')", "CURRENT_DATE").replace('?', '%s')
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query, params)
-            
-            print("✅ Configuração da obra criada!")
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-    except Exception as e:
-        print(f"Erro ao criar dados iniciais: {e}", file=sys.stderr); sys.stderr.flush()
+            # Processa inicialização
+            if init_button:
+                with st.spinner("Inicializando banco de dados..."):
+                    try:
+                        # Primeiro inicializa as tabelas
+                        init_db()
+                        st.success("✅ Tabelas criadas com sucesso!")
+                        
+                        # Depois cria os dados iniciais
+                        if create_first_user():
+                            st.balloons()
+                        
+                    except Exception as e:
+                        st.error(f"❌ Erro na inicialização: {str(e)}")
+                        print(f"Erro na inicialização: {repr(e)}", file=sys.stderr)
+    
+    # Informações do sistema
+    st.markdown("---")
+    
+    col_info1, col_info2 = st.columns(2)
+    
+    with col_info1:
+        st.markdown("""
+        ### 📋 Funcionalidades
+        - 📊 Dashboard com métricas
+        - 💰 Controle de lançamentos
+        - �� Upload de comprovantes
+        - 📈 Relatórios detalhados
+        - ⚙️ Configurações flexíveis
+        """)
+    
+    with col_info2:
+        st.markdown("""
+        ### 🔧 Primeiro Acesso
+        1. Clique em "Inicializar Sistema"
+        2. Aguarde a criação das tabelas
+        3. Use: deverson@obra.com / 123456
+        4. Configure sua obra nas Configurações
+        """)
 
 def logout():
-    """Faz logout do usuário"""
-    for key in ['user', 'authenticated']:
-        if key in st.session_state:
-            del st.session_state[key]
+    """Realiza logout do usuário"""
+    if 'authenticated' in st.session_state:
+        del st.session_state.authenticated
+    if 'user' in st.session_state:
+        del st.session_state.user
     st.rerun()
 
-def is_authenticated():
-    """Verifica se o usuário está autenticado"""
-    return 'authenticated' in st.session_state and st.session_state.authenticated
+def check_authentication():
+    """Verifica se usuário está autenticado"""
+    return st.session_state.get('authenticated', False)
 
 def get_current_user():
-    """Retorna o usuário atual"""
-    if 'user' in st.session_state:
-        return st.session_state.user
-    return None
+    """Retorna dados do usuário atual"""
+    return st.session_state.get('user', None)
 
-def require_auth():
-    """Decorator para páginas que requerem autenticação"""
-    if not is_authenticated():
-        st.error("🔒 Acesso negado. Faça login primeiro.")
-        st.stop()
-
-def check_user_type(required_type):
-    """Verifica se o usuário tem o tipo necessário"""
+def show_user_header():
+    """Exibe cabeçalho com informações do usuário"""
     user = get_current_user()
-    if not user or user['tipo'] != required_type:
-        st.error(f"🚫 Acesso restrito para {required_type}s")
-        st.stop()
+    if user:
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            st.markdown(f"### 👋 Olá, **{user['nome']}**!")
+        
+        with col2:
+            if st.button("🚪 Sair", use_container_width=True):
+                logout()
+
+def require_auth(func):
+    """Decorator para páginas que requerem autenticação"""
+    def wrapper(*args, **kwargs):
+        if not check_authentication():
+            show_login_page()
+            return
+        return func(*args, **kwargs)
+    return wrapper
