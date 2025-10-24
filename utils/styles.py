@@ -7,35 +7,42 @@ def load_css():
         /* Importar fonte do Google */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         
-        /* Configurações globais - MODO NOTURNO */
+        /* Configurações globais - MODO NOTURNO (Mais abrangente) */
+        body {
+            background-color: #0e1117 !important;
+            color: #ffffff !important;
+            font-family: 'Inter', sans-serif;
+            line-height: 1.5; /* Ajuste para letras cortadas */
+        }
         .stApp {
             background-color: #0e1117 !important;
-            color: #ffffff !important; 
+            color: #ffffff !important;
         }
         
-        .main .block-container {
+        /* Containers principais do Streamlit */
+        .main .block-container, .st-emotion-cache-z5fcl4 { /* Seletor comum para o container principal do conteúdo */
             padding-top: 2rem;
             padding-bottom: 2rem;
             background-color: #0e1117 !important;
+            color: #ffffff !important;
         }
         
         /* Sidebar modo noturno */
-        .css-1d391kg { 
+        .css-1d391kg, .st-emotion-cache-l9rwms { /* Seletores para a sidebar */
             background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%) !important;
             color: #ffffff !important;
         }
-        
-        .css-1d391kg .css-1v0mbdj {
+        .css-1d391kg .css-1v0mbdj, .st-emotion-cache-1v0mbdj { /* Título da sidebar */
             color: white !important;
         }
-
-        .st-emotion-cache-1r6dm1s { 
+        .css-1d391kg .st-emotion-cache-1r6dm1s { /* Texto geral dentro da sidebar */
             color: white !important;
         }
         
-        /* Textos gerais em modo noturno (incluindo li e a) */
-        .stMarkdown, .stText, p, span, div, li, a {
+        /* Textos gerais em modo noturno (incluindo li e a, reforçando a cor) */
+        .stMarkdown, .stText, p, span, div, li, a, label {
             color: #ffffff !important;
+            line-height: 1.5 !important; /* Reforçando line-height para todos os textos */
         }
         
         .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
@@ -292,7 +299,7 @@ def load_css():
             margin: 1rem 0;
         }
         
-        /* Inputs customizados - Modo noturno */
+        /* Inputs customizados */
         .stTextInput > div > div > input,
         .stNumberInput > div > div > input,
         .stTextArea > div > div > textarea,
@@ -308,37 +315,42 @@ def load_css():
         }
 
         /* Selectbox customizado - Fundo do selectbox e texto selecionado */
-        .stSelectbox > div > div > div:first-child { /* Target the displayed value in the selectbox */
+        /* Seletor do componente selectbox em si */
+        div.stSelectbox > div[data-testid="stForm"] > div > div > div:first-child,
+        div.stSelectbox > div > div > div:first-child { 
             background-color: #2c3e50 !important; 
             border: 2px solid #3498db !important;
             color: #ecf0f1 !important;
             border-radius: 8px !important;
             padding: 0.75rem !important;
-            min-height: 38px; /* Ajuste para ter a mesma altura dos outros inputs */
+            min-height: 38px;
             display: flex;
             align-items: center;
         }
-        .stSelectbox > div > div > div:first-child > div { /* Target the text inside the displayed value */
+        /* Texto exibido dentro do selectbox */
+        div.stSelectbox > div > div > div:first-child > div {
             color: #ecf0f1 !important;
         }
-
-        /* Selectbox Dropdown (lista de opções) */
+        
+        /* Selectbox Dropdown (lista de opções) - Seletor mais robusto */
         div[data-baseweb="popover"] > div > div[role="listbox"] {
-            background-color: #1a1a2e !important; /* Fundo escuro para a lista de opções */
+            background-color: #1a1a2e !important;
             border: 1px solid #3498db !important;
             border-radius: 8px !important;
+            color: #ecf0f1 !important; /* Cor padrão para as opções */
         }
-
+        
         /* Opções individuais dentro do dropdown */
         div[data-baseweb="popover"] > div > div[role="listbox"] > div[role="option"] {
-            color: #ecf0f1 !important; /* Texto claro para as opções */
+            color: #ecf0f1 !important;
             background-color: transparent !important;
-            padding: 10px 15px !important; /* Padding para melhor espaçamento */
+            padding: 10px 15px !important;
+            line-height: 1.5 !important; /* Ajuste para letras cortadas em opções */
         }
-
+        
         /* Efeito hover nas opções do dropdown */
         div[data-baseweb="popover"] > div > div[role="listbox"] > div[role="option"]:hover {
-            background-color: #34495e !important; /* Fundo mais claro no hover */
+            background-color: #34495e !important;
             color: white !important;
         }
         
@@ -385,21 +397,25 @@ def load_css():
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             background-color: #1a1a2e !important;
+            color: #ffffff !important; /* Garantir que o texto no dataframe seja branco */
+        }
+        .dataframe th, .dataframe td { /* Cabeçalho e células do dataframe */
+            color: #ffffff !important;
         }
         
         /* Sidebar elementos */
-        .css-1d391kg .stSelectbox label {
+        .css-1d391kg .stSelectbox label, .st-emotion-cache-1r6dm1s .stSelectbox label {
             color: white !important;
         }
         
-        .css-1d391kg .stMetric {
+        .css-1d391kg .stMetric, .st-emotion-cache-1r6dm1s .stMetric {
             background: rgba(255, 255, 255, 0.1);
             padding: 0.5rem;
             border-radius: 8px;
             margin: 0.25rem 0;
         }
         
-        .css-1d391kg .stMetric label {
+        .css-1d391kg .stMetric label, .st-emotion-cache-1r6dm1s .stMetric label {
             color: white !important;
         }
         
@@ -411,6 +427,7 @@ def load_css():
         .stAlert {
             border-radius: 8px;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white !important; /* Garantir que o texto dos alertas seja branco */
         }
         
         /* Success alert */
@@ -444,13 +461,7 @@ def load_css():
             border-radius: 12px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-        
-        /* Labels dos inputs */
-        .stTextInput label, .stSelectbox label, .stNumberInput label, .stDateInput label, .stTextArea label {
-            color: white !important;
-            font-family: 'Inter', sans-serif;
-            font-weight: 500;
+            color: #ffffff !important; /* Garantir que o texto do formulário seja branco */
         }
         
         /* Tabs customizadas */
