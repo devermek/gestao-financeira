@@ -1,7 +1,7 @@
 import sqlite3
 import os
 import pandas as pd
-import sys # <-- ESTA LINHA É CRÍTICA!
+import sys
 
 # Necessário para lidar com tipos de retorno de banco de dados em auth.py
 try:
@@ -25,7 +25,6 @@ def get_db_connection():
             print(f"🔗 Tentando conectar ao PostgreSQL...", file=sys.stderr); sys.stderr.flush()
             
             dsn_to_connect = database_url
-            # Lógica mais robusta para adicionar sslmode=require
             if 'supabase.co' in database_url or 'neon.tech' in database_url:
                 if '?' in database_url:
                     dsn_to_connect = database_url + "&sslmode=require"
@@ -54,8 +53,6 @@ def get_sqlite_connection():
     conn.row_factory = sqlite3.Row # Permite acessar colunas por nome
     return conn
 
-# REMOVIDO: A função get_current_db_type() não é mais necessária.
-
 def init_db():
     """Inicializa o banco de dados com todas as tabelas"""
     conn, db_type = get_db_connection() # Obtém a conexão e o tipo de DB real
@@ -74,10 +71,9 @@ def init_db():
 def init_postgresql():
     """Inicializa banco PostgreSQL"""
     print("🐘 Inicializando PostgreSQL...", file=sys.stderr); sys.stderr.flush()
-    conn, _ = get_db_connection() # Apenas a conexão é necessária aqui, o tipo já foi determinado
+    conn, _ = get_db_connection()
     cursor = conn.cursor()
     
-    # Helper para criação de triggers para simplificar e evitar o erro "near OR"
     def create_update_timestamp_trigger(cursor, table_name, trigger_name_suffix):
         trigger_name = f"update_{table_name}_{trigger_name_suffix}"
         try:
@@ -93,7 +89,6 @@ def init_postgresql():
         except Exception as e:
             print(f"❌ Erro ao criar trigger '{trigger_name}' para a tabela '{table_name}': {e}", file=sys.stderr); sys.stderr.flush()
 
-    # Criação da função de trigger (sempre a primeira)
     try:
         cursor.execute("""
             CREATE OR REPLACE FUNCTION update_timestamp()
@@ -107,14 +102,14 @@ def init_postgresql():
     except Exception as e:
         print(f"❌ Erro ao criar função 'update_timestamp()': {e}", file=sys.stderr); sys.stderr.flush()
 
-    # Tabela de usuários (com 'ativo' como BOOLEAN e 'updated_at')
+    # Tabela de usuários (tipo 'gestor' apenas)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id SERIAL PRIMARY KEY,
             nome VARCHAR(255) NOT NULL,
             email VARCHAR(255) UNIQUE NOT NULL,
             senha VARCHAR(255) NOT NULL,
-            tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('gestor', 'investidor')),
+            tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('gestor')), -- Apenas 'gestor'
             ativo BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -162,7 +157,7 @@ def init_postgresql():
             tipo VARCHAR(100) NOT NULL,
             tamanho INTEGER,
             conteudo BYTEA,
-            lancamento_id INTEGER, -- Pode ser NULL se o arquivo não estiver associado a um lançamento
+            lancamento_id INTEGER,
             usuario_id INTEGER NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -193,18 +188,18 @@ def init_postgresql():
 
 def init_sqlite():
     """Inicializa banco SQLite"""
-    print("�� Inicializando SQLite...", file=sys.stderr); sys.stderr.flush()
+    print("✨ Inicializando SQLite...", file=sys.stderr); sys.stderr.flush()
     conn = get_sqlite_connection()
     cursor = conn.cursor()
     
-    # Tabela de usuários (com 'ativo' como INTEGER e 'updated_at')
+    # Tabela de usuários (tipo 'gestor' apenas)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
             senha TEXT NOT NULL,
-            tipo TEXT NOT NULL CHECK (tipo IN ('gestor', 'investidor')),
+            tipo TEXT NOT NULL CHECK (tipo IN ('gestor')), -- Apenas 'gestor'
             ativo INTEGER DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

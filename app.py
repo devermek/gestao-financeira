@@ -18,10 +18,11 @@ st.set_page_config(
     page_title="Sistema de Gestão de Obras",
     page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    theme="dark" # <--- CHAVE PARA FORÇAR O TEMA ESCURO NATIVO DO STREAMLIT
 )
 
-# Carregar CSS personalizado
+# Carregar CSS personalizado (agora para aprimorar o tema dark nativo)
 load_css()
 
 # Verificar autenticação
@@ -42,19 +43,15 @@ else:
     # Sidebar de navegação
     st.sidebar.title("🏗️ Menu Principal")
     
-    # Opções do menu baseadas no tipo de usuário
-    if user['tipo'] == 'gestor':
-        menu_options = {
-            "📊 Dashboard": "dashboard",
-            "💰 Lançamentos": "lancamentos", 
-            "�� Relatórios": "relatorios",
-            "⚙️ Configurações": "configuracoes"
-        }
-    else:  # investidor
-        menu_options = {
-            "📊 Dashboard": "dashboard",
-            "�� Relatórios": "relatorios"
-        }
+    # === SIMPLIFICAÇÃO: Remover lógica de tipo de usuário para o menu ===
+    # Agora, o menu sempre exibirá todas as opções, já que só teremos usuários 'gestor'
+    menu_options = {
+        "📊 Dashboard": "dashboard",
+        "💰 Lançamentos": "lancamentos", 
+        "📈 Relatórios": "relatorios",
+        "⚙️ Configurações": "configuracoes"
+    }
+    # === FIM DA SIMPLIFICAÇÃO ===
     
     # Seleção da página
     selected_page = st.sidebar.selectbox(
@@ -65,7 +62,7 @@ else:
     
     # Informações da obra na sidebar
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### ��️ Informações da Obra")
+    st.sidebar.markdown("### 🏗️ Informações da Obra")
     if obra_config and obra_config.get('nome_obra'):
         st.sidebar.info(f"**{obra_config['nome_obra']}**")
         
@@ -94,4 +91,4 @@ else:
             show_configuracoes(user, obra_config)
     except Exception as e:
         st.error(f"❌ Erro ao carregar a página: {e}")
-        st.info("🔄 Tente recarregar a página ou entre em contato com o suporte.")
+        st.info("�� Tente recarregar a página ou entre em contato com o suporte.")
