@@ -30,7 +30,15 @@ if not is_authenticated():
 else:
     # Usuário autenticado - OBTER DADOS NECESSÁRIOS
     user = get_current_user()
-    obra_config = get_obra_config()
+    
+    # --- NOVO: Tratamento defensivo para obra_config ---
+    obra_config_raw = get_obra_config()
+    if not isinstance(obra_config_raw, dict):
+        st.error(f"❌ Erro crítico: A configuração da obra não retornou um dicionário. Tipo retornado: {type(obra_config_raw)}")
+        st.info("Verifique os logs do Render para mais detalhes. Reinicialize o DB se necessário.")
+        st.stop() # Interrompe a execução para evitar o erro de atributo
+    obra_config = obra_config_raw
+    # --- FIM NOVO ---
     
     # Converter user para dict se necessário (compatibilidade PostgreSQL)
     if hasattr(user, 'to_dict'):
@@ -43,7 +51,6 @@ else:
     st.sidebar.title("🏗️ Menu Principal")
     
     # === SIMPLIFICAÇÃO: Remover lógica de tipo de usuário para o menu ===
-    # Agora, o menu sempre exibirá todas as opções, já que só teremos usuários 'gestor'
     menu_options = {
         "📊 Dashboard": "dashboard",
         "💰 Lançamentos": "lancamentos", 
@@ -61,7 +68,7 @@ else:
     
     # Informações da obra na sidebar
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🏗️ Informações da Obra")
+    st.sidebar.markdown("### ��️ Informações da Obra")
     if obra_config and obra_config.get('nome_obra'):
         st.sidebar.info(f"**{obra_config['nome_obra']}**")
         
