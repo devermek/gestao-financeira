@@ -37,7 +37,7 @@ def _show_obra_config():
             )
             
             orcamento = st.number_input(
-                "Orçamento Total (R\$)",
+                "Orçamento Total (R$)",
                 min_value=0.0,
                 value=float(obra_config.get('orcamento', 0.0)),
                 step=1000.0,

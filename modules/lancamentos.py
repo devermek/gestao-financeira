@@ -52,7 +52,7 @@ def _show_novo_lancamento():
             )
             
             valor = st.number_input(
-                "Valor (R\$) *",
+                "Valor (R$) *",
                 min_value=0.01,
                 step=0.01,
                 format="%.2f"
@@ -171,8 +171,8 @@ def _show_historico_lancamentos():
         
         with col3:
             # Filtro por valor
-            valor_min = st.number_input("Valor Mínimo (R\$)", min_value=0.0, value=0.0)
-            valor_max = st.number_input("Valor Máximo (R\$)", min_value=0.0, value=0.0)
+            valor_min = st.number_input("Valor Mínimo (R$)", min_value=0.0, value=0.0)
+            valor_max = st.number_input("Valor Máximo (R$)", min_value=0.0, value=0.0)
     
     # Busca lançamentos
     lancamentos = _get_lancamentos_filtrados(

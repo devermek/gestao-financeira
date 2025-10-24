@@ -220,7 +220,7 @@ def _create_gastos_categoria_chart(gastos_categoria):
         values=[cat['valor'] for cat in categorias_com_gastos],
         marker=dict(colors=[cat['cor'] for cat in categorias_com_gastos]),
         textinfo='label+percent',
-        hovertemplate='<b>%{label}</b><br>Valor: R\$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>'
+        hovertemplate='<b>%{label}</b><br>Valor: R$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>'
     )])
     
     fig.update_layout(
@@ -314,7 +314,7 @@ def _create_evolucao_mensal_chart():
             plot_bgcolor='rgba(0,0,0,0)',
             font=dict(color='white'),
             xaxis=dict(gridcolor='#404040', title="Mês"),
-            yaxis=dict(gridcolor='#404040', title="Valor (R\$)", tickformat=',.0f')
+            yaxis=dict(gridcolor='#404040', title="Valor (R$)", tickformat=',.0f')
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -372,7 +372,7 @@ def _create_gastos_diarios_chart(lancamentos, data_inicio, data_fim):
         plot_bgcolor='rgba(0,0,0,0)',
         font=dict(color='white'),
         xaxis=dict(gridcolor='#404040', title="Data"),
-        yaxis=dict(gridcolor='#404040', title="Valor (R\$)", tickformat=',.0f')
+        yaxis=dict(gridcolor='#404040', title="Valor (R$)", tickformat=',.0f')
     )
     
     st.plotly_chart(fig, use_container_width=True)
@@ -657,8 +657,8 @@ def _generate_excel_report(df_lancamentos):
             # Aba com resumo por categoria
             resumo_categoria = df_lancamentos.groupby('categoria_nome')['valor'].agg(['sum', 'count', 'mean']).reset_index()
             resumo_categoria.columns = ['Categoria', 'Total', 'Quantidade', 'Média']
-            resumo_categoria['Total'] = resumo_categoria['Total'].apply(lambda x: f"R\$ {x:,.2f}")
-            resumo_categoria['Média'] = resumo_categoria['Média'].apply(lambda x: f"R\$ {x:,.2f}")
+            resumo_categoria['Total'] = resumo_categoria['Total'].apply(lambda x: f"R$ {x:,.2f}")
+            resumo_categoria['Média'] = resumo_categoria['Média'].apply(lambda x: f"R$ {x:,.2f}")
             resumo_categoria.to_excel(writer, sheet_name='Resumo por Categoria', index=False)
         
         return output.getvalue()
