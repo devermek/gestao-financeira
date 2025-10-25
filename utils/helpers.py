@@ -6,15 +6,15 @@ def format_currency_br(valor):
     """Formata valor para moeda brasileira"""
     try:
         if valor is None or valor == 0:
-            return "R\$ 0,00"
+            return "R$ 0,00"
         
         # Converte para float se necessário
         if isinstance(valor, str):
             valor = float(valor.replace(',', '.'))
         
-        return f"R\$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except:
-        return "R\$ 0,00"
+        return "R$ 0,00"
 
 def format_date_br(data):
     """Formata data para padrão brasileiro"""
@@ -48,6 +48,24 @@ def get_obra_config():
         
         import os
         is_postgres = os.getenv('DATABASE_URL') is not None
+        
+        # Primeiro verifica se existe alguma obra
+        cursor.execute("SELECT COUNT(*) as count FROM obras")
+        result = cursor.fetchone()
+        obra_count = result['count'] if result else 0
+        
+        if obra_count == 0:
+            print("Nenhuma obra encontrada no banco", file=sys.stderr)
+            cursor.close()
+            conn.close()
+            return {
+                'id': None,
+                'nome': 'Nenhuma obra configurada',
+                'orcamento': 0.0,
+                'data_inicio': None,
+                'data_fim_prevista': None,
+                'created_at': None
+            }
         
         if is_postgres:
             query = """
@@ -104,7 +122,7 @@ def get_obra_config():
             except:
                 pass
             
-            return {
+            obra_config = {
                 'id': result['id'],
                 'nome': result['nome'],
                 'orcamento': orcamento,
@@ -112,8 +130,53 @@ def get_obra_config():
                 'data_fim_prevista': data_fim_prevista,
                 'created_at': result['created_at']
             }
+            
+            print(f"Obra encontrada: ID {obra_config['id']}, Nome: {obra_config['nome']}", file=sys.stderr)
+            cursor.close()
+            conn.close()
+            return obra_config
         
-        # Se não encontrou obra, retorna configuração padrão
+        # Se não encontrou obra ativa, pega a primeira disponível
+        cursor.execute("SELECT id, nome, orcamento, data_inicio, data_fim_prevista, created_at FROM obras ORDER BY id DESC LIMIT 1")
+        result = cursor.fetchone()
+        
+        if result:
+            print(f"Nenhuma obra ativa, usando primeira obra: ID {result['id']}", file=sys.stderr)
+            
+            # Ativa esta obra
+            if is_postgres:
+                cursor.execute("UPDATE obras SET ativo = TRUE WHERE id = %s", (result['id'],))
+            else:
+                cursor.execute("UPDATE obras SET ativo = 1 WHERE id = ?", (result['id'],))
+            
+            conn.commit()
+            
+            # Retorna dados da obra
+            orcamento = 0.0
+            try:
+                if result['orcamento'] is not None:
+                    from decimal import Decimal
+                    if isinstance(result['orcamento'], Decimal):
+                        orcamento = float(result['orcamento'])
+                    else:
+                        orcamento = float(result['orcamento'])
+            except (TypeError, ValueError):
+                orcamento = 0.0
+            
+            cursor.close()
+            conn.close()
+            return {
+                'id': result['id'],
+                'nome': result['nome'],
+                'orcamento': orcamento,
+                'data_inicio': result['data_inicio'],
+                'data_fim_prevista': result['data_fim_prevista'],
+                'created_at': result['created_at']
+            }
+        
+        # Se chegou aqui, não tem obra nenhuma
+        cursor.close()
+        conn.close()
         return {
             'id': None,
             'nome': 'Obra não configurada',
@@ -135,8 +198,10 @@ def get_obra_config():
         }
     finally:
         try:
-            cursor.close()
-            conn.close()
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
         except:
             pass
 
@@ -337,68 +402,4 @@ def get_dados_dashboard():
             
             dados['ultimos_lancamentos'].append({
                 'id': row['id'],
-                'descricao': row['descricao'],
-                'valor': valor,
-                'data_lancamento': row['data_lancamento'],
-                'categoria_nome': row['categoria_nome'],
-                'categoria_cor': row['categoria_cor']
-            })
-        
-        return dados
-        
-    except Exception as e:
-        print(f"Erro ao buscar dados do dashboard: {repr(e)}", file=sys.stderr)
-        return {
-            'total_gasto': 0.0,
-            'orcamento': 0.0,
-            'percentual_executado': 0.0,
-            'saldo_restante': 0.0,
-            'gastos_por_categoria': [],
-            'ultimos_lancamentos': []
-        }
-    finally:
-        try:
-            cursor.close()
-            conn.close()
-        except:
-            pass
-
-def safe_float_conversion(value):
-    """Converte valor para float de forma segura"""
-    try:
-        if value is None:
-            return 0.0
-        
-        from decimal import Decimal
-        if isinstance(value, Decimal):
-            return float(value)
-        elif isinstance(value, (int, float)):
-            return float(value)
-        elif isinstance(value, str):
-            return float(value.replace(',', '.'))
-        else:
-            return 0.0
-    except (TypeError, ValueError):
-        return 0.0
-
-def safe_date_conversion(date_value):
-    """Converte data de forma segura"""
-    try:
-        if date_value is None:
-            return None
-        
-        if isinstance(date_value, str):
-            # Tenta diferentes formatos
-            for fmt in ['%Y-%m-%d', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S']:
-                try:
-                    return datetime.strptime(date_value, fmt).date()
-                except:
-                    continue
-        elif isinstance(date_value, datetime):
-            return date_value.date()
-        elif isinstance(date_value, date):
-            return date_value
-        
-        return None
-    except:
-        return None
+                'descricao': row['desc
