@@ -6,15 +6,15 @@ def format_currency_br(valor):
     """Formata valor para moeda brasileira"""
     try:
         if valor is None or valor == 0:
-            return "R$ 0,00"
+            return "R\$ 0,00"
         
         # Converte para float se necessário
         if isinstance(valor, str):
             valor = float(valor.replace(',', '.'))
         
-        return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f"R\$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except:
-        return "R$ 0,00"
+        return "R\$ 0,00"
 
 def format_date_br(data):
     """Formata data para padrão brasileiro"""
@@ -253,8 +253,10 @@ def get_categorias_ativas():
             pass
 
 def get_dados_dashboard():
-    """Retorna dados para o dashboard"""
+    """Retorna dados para o dashboard - SEM CACHE PARA FORÇAR ATUALIZAÇÃO"""
     try:
+        print("=== INICIANDO BUSCA DE DADOS DO DASHBOARD ===", file=sys.stderr)
+        
         conn = get_connection()
         cursor = conn.cursor()
         
@@ -263,6 +265,7 @@ def get_dados_dashboard():
         
         # Busca obra ativa
         obra_config = get_obra_config()
+        print(f"Obra config: {obra_config}", file=sys.stderr)
         
         # Inicializa dados padrão
         dados = {
@@ -275,66 +278,109 @@ def get_dados_dashboard():
         }
         
         if not obra_config.get('id'):
+            print("Nenhuma obra ativa encontrada", file=sys.stderr)
+            cursor.close()
+            conn.close()
             return dados
         
-        # Total gasto
+        obra_id = obra_config['id']
+        print(f"Buscando dados para obra ID: {obra_id}", file=sys.stderr)
+        
+        # BUSCA TOTAL GASTO - QUERY MAIS SIMPLES E DIRETA
         if is_postgres:
             query_total = """
-                SELECT COALESCE(SUM(valor), 0) as total
-                FROM lancamentos l
-                JOIN obras o ON l.obra_id = o.id
-                WHERE o.ativo = TRUE
+                SELECT COALESCE(SUM(CAST(valor AS DECIMAL)), 0) as total
+                FROM lancamentos 
+                WHERE obra_id = %s
             """
+            cursor.execute(query_total, (obra_id,))
         else:
             query_total = """
-                SELECT COALESCE(SUM(valor), 0) as total
-                FROM lancamentos l
-                JOIN obras o ON l.obra_id = o.id
-                WHERE o.ativo = 1
+                SELECT COALESCE(SUM(CAST(valor AS REAL)), 0) as total
+                FROM lancamentos 
+                WHERE obra_id = ?
             """
+            cursor.execute(query_total, (obra_id,))
         
-        cursor.execute(query_total)
         result = cursor.fetchone()
+        print(f"Resultado query total: {result}", file=sys.stderr)
         
         if result and result['total']:
             from decimal import Decimal
-            if isinstance(result['total'], Decimal):
-                dados['total_gasto'] = float(result['total'])
+            total_value = result['total']
+            print(f"Total bruto do banco: {total_value} (tipo: {type(total_value)})", file=sys.stderr)
+            
+            if isinstance(total_value, Decimal):
+                dados['total_gasto'] = float(total_value)
             else:
-                dados['total_gasto'] = float(result['total'])
+                dados['total_gasto'] = float(total_value)
+        
+        print(f"Total gasto calculado: {dados['total_gasto']}", file=sys.stderr)
+        
+        # VERIFICA QUANTOS LANÇAMENTOS EXISTEM
+        if is_postgres:
+            cursor.execute("SELECT COUNT(*) as count FROM lancamentos WHERE obra_id = %s", (obra_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM lancamentos WHERE obra_id = ?", (obra_id,))
+        
+        count_result = cursor.fetchone()
+        total_lancamentos = count_result['count'] if count_result else 0
+        print(f"Total de lançamentos na obra: {total_lancamentos}", file=sys.stderr)
+        
+        # LISTA TODOS OS LANÇAMENTOS PARA DEBUG
+        if is_postgres:
+            cursor.execute("""
+                SELECT id, descricao, valor, data_lancamento, created_at 
+                FROM lancamentos 
+                WHERE obra_id = %s 
+                ORDER BY created_at DESC
+            """, (obra_id,))
+        else:
+            cursor.execute("""
+                SELECT id, descricao, valor, data_lancamento, created_at 
+                FROM lancamentos 
+                WHERE obra_id = ? 
+                ORDER BY created_at DESC
+            """, (obra_id,))
+        
+        all_lancamentos = cursor.fetchall()
+        print(f"Lançamentos encontrados:", file=sys.stderr)
+        for lanc in all_lancamentos:
+            print(f"  ID: {lanc['id']}, Valor: {lanc['valor']}, Desc: {lanc['descricao']}", file=sys.stderr)
         
         # Calcula percentuais
         if dados['orcamento'] > 0:
             dados['percentual_executado'] = (dados['total_gasto'] / dados['orcamento']) * 100
             dados['saldo_restante'] = dados['orcamento'] - dados['total_gasto']
         
+        print(f"Percentual executado: {dados['percentual_executado']:.2f}%", file=sys.stderr)
+        print(f"Saldo restante: {dados['saldo_restante']}", file=sys.stderr)
+        
         # Gastos por categoria
         if is_postgres:
             query_categorias = """
                 SELECT 
                     c.id, c.nome, c.cor,
-                    COALESCE(SUM(l.valor), 0) as valor
+                    COALESCE(SUM(CAST(l.valor AS DECIMAL)), 0) as valor
                 FROM categorias c
-                LEFT JOIN lancamentos l ON c.id = l.categoria_id
-                LEFT JOIN obras o ON l.obra_id = o.id AND o.ativo = TRUE
+                LEFT JOIN lancamentos l ON c.id = l.categoria_id AND l.obra_id = %s
                 WHERE c.ativo = TRUE
                 GROUP BY c.id, c.nome, c.cor
                 ORDER BY valor DESC
             """
+            cursor.execute(query_categorias, (obra_id,))
         else:
             query_categorias = """
                 SELECT 
                     c.id, c.nome, c.cor,
-                    COALESCE(SUM(l.valor), 0) as valor
+                    COALESCE(SUM(CAST(l.valor AS REAL)), 0) as valor
                 FROM categorias c
-                LEFT JOIN lancamentos l ON c.id = l.categoria_id
-                LEFT JOIN obras o ON l.obra_id = o.id AND o.ativo = 1
+                LEFT JOIN lancamentos l ON c.id = l.categoria_id AND l.obra_id = ?
                 WHERE c.ativo = 1
                 GROUP BY c.id, c.nome, c.cor
                 ORDER BY valor DESC
             """
-        
-        cursor.execute(query_categorias)
+            cursor.execute(query_categorias, (obra_id,))
         
         for row in cursor.fetchall():
             valor = 0.0
@@ -352,13 +398,16 @@ def get_dados_dashboard():
             if dados['total_gasto'] > 0:
                 percentual = (valor / dados['total_gasto']) * 100
             
-            dados['gastos_por_categoria'].append({
+            categoria_data = {
                 'id': row['id'],
                 'nome': row['nome'],
                 'cor': row['cor'],
                 'valor': valor,
                 'percentual': percentual
-            })
+            }
+            
+            dados['gastos_por_categoria'].append(categoria_data)
+            print(f"Categoria: {row['nome']}, Valor: {valor}", file=sys.stderr)
         
         # Últimos lançamentos
         if is_postgres:
@@ -368,11 +417,11 @@ def get_dados_dashboard():
                     c.nome as categoria_nome, c.cor as categoria_cor
                 FROM lancamentos l
                 JOIN categorias c ON l.categoria_id = c.id
-                JOIN obras o ON l.obra_id = o.id
-                WHERE o.ativo = TRUE
+                WHERE l.obra_id = %s
                 ORDER BY l.created_at DESC
                 LIMIT 5
             """
+            cursor.execute(query_lancamentos, (obra_id,))
         else:
             query_lancamentos = """
                 SELECT 
@@ -380,13 +429,11 @@ def get_dados_dashboard():
                     c.nome as categoria_nome, c.cor as categoria_cor
                 FROM lancamentos l
                 JOIN categorias c ON l.categoria_id = c.id
-                JOIN obras o ON l.obra_id = o.id
-                WHERE o.ativo = 1
+                WHERE l.obra_id = ?
                 ORDER BY l.created_at DESC
                 LIMIT 5
             """
-        
-        cursor.execute(query_lancamentos)
+            cursor.execute(query_lancamentos, (obra_id,))
         
         for row in cursor.fetchall():
             valor = 0.0
@@ -400,19 +447,34 @@ def get_dados_dashboard():
             except (TypeError, ValueError):
                 valor = 0.0
             
-            dados['ultimos_lancamentos'].append({
+            lancamento_data = {
                 'id': row['id'],
                 'descricao': row['descricao'],
                 'valor': valor,
                 'data_lancamento': row['data_lancamento'],
                 'categoria_nome': row['categoria_nome'],
                 'categoria_cor': row['categoria_cor']
-            })
+            }
+            
+            dados['ultimos_lancamentos'].append(lancamento_data)
+            print(f"Último lançamento: {row['descricao']}, Valor: {valor}", file=sys.stderr)
+        
+        cursor.close()
+        conn.close()
+        
+        print(f"=== DADOS FINAIS DO DASHBOARD ===", file=sys.stderr)
+        print(f"Total gasto: {dados['total_gasto']}", file=sys.stderr)
+        print(f"Orçamento: {dados['orcamento']}", file=sys.stderr)
+        print(f"Percentual: {dados['percentual_executado']:.2f}%", file=sys.stderr)
+        print(f"Categorias com gastos: {len([c for c in dados['gastos_por_categoria'] if c['valor'] > 0])}", file=sys.stderr)
+        print(f"Últimos lançamentos: {len(dados['ultimos_lancamentos'])}", file=sys.stderr)
         
         return dados
         
     except Exception as e:
         print(f"Erro ao buscar dados do dashboard: {repr(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         return {
             'total_gasto': 0.0,
             'orcamento': 0.0,
@@ -423,8 +485,10 @@ def get_dados_dashboard():
         }
     finally:
         try:
-            cursor.close()
-            conn.close()
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
         except:
             pass
 
@@ -535,38 +599,43 @@ def get_resumo_categorias():
         import os
         is_postgres = os.getenv('DATABASE_URL') is not None
         
+        # Busca obra ativa
+        obra_config = get_obra_config()
+        if not obra_config.get('id'):
+            return []
+        
+        obra_id = obra_config['id']
+        
         if is_postgres:
             query = """
                 SELECT 
                     c.nome,
                     c.cor,
                     COUNT(l.id) as total_lancamentos,
-                    COALESCE(SUM(l.valor), 0) as total_valor,
-                    COALESCE(AVG(l.valor), 0) as valor_medio
+                    COALESCE(SUM(CAST(l.valor AS DECIMAL)), 0) as total_valor,
+                    COALESCE(AVG(CAST(l.valor AS DECIMAL)), 0) as valor_medio
                 FROM categorias c
-                LEFT JOIN lancamentos l ON c.id = l.categoria_id
-                LEFT JOIN obras o ON l.obra_id = o.id AND o.ativo = TRUE
+                LEFT JOIN lancamentos l ON c.id = l.categoria_id AND l.obra_id = %s
                 WHERE c.ativo = TRUE
                 GROUP BY c.id, c.nome, c.cor
                 ORDER BY total_valor DESC
             """
+            cursor.execute(query, (obra_id,))
         else:
             query = """
                 SELECT 
                     c.nome,
                     c.cor,
                     COUNT(l.id) as total_lancamentos,
-                    COALESCE(SUM(l.valor), 0) as total_valor,
-                    COALESCE(AVG(l.valor), 0) as valor_medio
+                    COALESCE(SUM(CAST(l.valor AS REAL)), 0) as total_valor,
+                    COALESCE(AVG(CAST(l.valor AS REAL)), 0) as valor_medio
                 FROM categorias c
-                LEFT JOIN lancamentos l ON c.id = l.categoria_id
-                LEFT JOIN obras o ON l.obra_id = o.id AND o.ativo = 1
+                LEFT JOIN lancamentos l ON c.id = l.categoria_id AND l.obra_id = ?
                 WHERE c.ativo = 1
                 GROUP BY c.id, c.nome, c.cor
                 ORDER BY total_valor DESC
             """
-        
-        cursor.execute(query)
+            cursor.execute(query, (obra_id,))
         
         resumo = []
         for row in cursor.fetchall():
@@ -619,17 +688,23 @@ def get_estatisticas_gerais():
         import os
         is_postgres = os.getenv('DATABASE_URL') is not None
         
-        # Conta total de lançamentos
+        # Busca obra ativa
+        obra_config = get_obra_config()
+        if not obra_config.get('id'):
+            return {
+                'total_lancamentos': 0,
+                'total_categorias': 0,
+                'total_obras': 0,
+                'total_arquivos': 0
+            }
+        
+        obra_id = obra_config['id']
+        
+        # Conta total de lançamentos da obra ativa
         if is_postgres:
-            cursor.execute("""
-                SELECT COUNT(*) as total FROM lancamentos l
-                JOIN obras o ON l.obra_id = o.id WHERE o.ativo = TRUE
-            """)
+            cursor.execute("SELECT COUNT(*) as total FROM lancamentos WHERE obra_id = %s", (obra_id,))
         else:
-            cursor.execute("""
-                SELECT COUNT(*) as total FROM lancamentos l
-                JOIN obras o ON l.obra_id = o.id WHERE o.ativo = 1
-            """)
+            cursor.execute("SELECT COUNT(*) as total FROM lancamentos WHERE obra_id = ?", (obra_id,))
         
         total_lancamentos = cursor.fetchone()['total']
         
@@ -645,8 +720,20 @@ def get_estatisticas_gerais():
         cursor.execute("SELECT COUNT(*) as total FROM obras")
         total_obras = cursor.fetchone()['total']
         
-        # Conta total de arquivos
-        cursor.execute("SELECT COUNT(*) as total FROM arquivos")
+        # Conta total de arquivos da obra ativa
+        if is_postgres:
+            cursor.execute("""
+                SELECT COUNT(*) as total FROM arquivos a
+                JOIN lancamentos l ON a.lancamento_id = l.id
+                WHERE l.obra_id = %s
+            """, (obra_id,))
+        else:
+            cursor.execute("""
+                SELECT COUNT(*) as total FROM arquivos a
+                JOIN lancamentos l ON a.lancamento_id = l.id
+                WHERE l.obra_id = ?
+            """, (obra_id,))
+        
         total_arquivos = cursor.fetchone()['total']
         
         return {
@@ -670,3 +757,41 @@ def get_estatisticas_gerais():
             conn.close()
         except:
             pass
+
+def debug_database_state():
+    """Função para debug do estado do banco"""
+    try:
+        print("=== DEBUG DO ESTADO DO BANCO ===", file=sys.stderr)
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Lista todas as obras
+        cursor.execute("SELECT id, nome, ativo FROM obras")
+        obras = cursor.fetchall()
+        print(f"Obras no banco: {len(obras)}", file=sys.stderr)
+        for obra in obras:
+            print(f"  Obra ID: {obra['id']}, Nome: {obra['nome']}, Ativo: {obra['ativo']}", file=sys.stderr)
+        
+        # Lista todos os lançamentos
+        cursor.execute("SELECT id, obra_id, descricao, valor FROM lancamentos")
+        lancamentos = cursor.fetchall()
+        print(f"Lançamentos no banco: {len(lancamentos)}", file=sys.stderr)
+        for lanc in lancamentos:
+            print(f"  Lançamento ID: {lanc['id']}, Obra: {lanc['obra_id']}, Valor: {lanc['valor']}, Desc: {lanc['descricao']}", file=sys.stderr)
+        
+        cursor.close()
+        conn.close()
+        
+    except Exception as e:
+        print(f"Erro no debug: {repr(e)}", file=sys.stderr)
+
+def force_refresh_dashboard():
+    """Força atualização dos dados do dashboard"""
+    # Remove qualquer cache existente
+    cache_keys = ['dashboard_cache', 'lancamentos_cache', 'obra_cache']
+    for key in cache_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+    
+    print("Cache do dashboard limpo forçadamente", file=sys.stderr)

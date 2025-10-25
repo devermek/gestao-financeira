@@ -12,10 +12,27 @@ def show_dashboard():
     
     st.title("🏠 Início")
     
-    # Carrega dados
+    # Botão de debug para forçar atualização
+    if st.button("🔍 Debug & Atualizar", help="Força atualização e mostra logs"):
+        from utils.helpers import debug_database_state, force_refresh_dashboard
+        debug_database_state()
+        force_refresh_dashboard()
+        st.rerun()
+    
+    # Carrega dados SEM CACHE
     with st.spinner("Carregando dados..."):
         dados = get_dados_dashboard()
         obra_config = get_obra_config()
+    
+    # Debug info
+    if st.checkbox("🐛 Mostrar Debug Info", value=False):
+        st.json({
+            "obra_config": obra_config,
+            "total_gasto": dados['total_gasto'],
+            "orcamento": dados['orcamento'],
+            "num_categorias": len(dados['gastos_por_categoria']),
+            "num_lancamentos": len(dados['ultimos_lancamentos'])
+        })
     
     if not obra_config or not obra_config.get('id'):
         st.warning("⚠️ Configure uma obra para visualizar o painel!")
@@ -36,7 +53,7 @@ def show_dashboard():
     
     # GRÁFICO ÚNICO COMBINADO
     _show_grafico_distribuicao_completo(dados)
-
+    
 def _show_metricas_principais(dados):
     """Exibe métricas principais"""
     col1, col2, col3, col4 = st.columns(4)
