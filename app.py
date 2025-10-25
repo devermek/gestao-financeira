@@ -27,8 +27,10 @@ def main():
     # Carrega estilos CSS
     load_css()
     
-    # Inicializa banco se necessário
-    init_system_if_needed()
+    # Inicializa banco se necessário (apenas uma vez por sessão)
+    if 'db_initialized' not in st.session_state:
+        init_system_if_needed()
+        st.session_state.db_initialized = True
     
     # Interface principal
     show_main_interface()
@@ -47,7 +49,7 @@ def init_system_if_needed():
                 init_db()
                 create_initial_data()
                 st.success("✅ Sistema inicializado com sucesso!")
-                st.rerun()
+                # Remove o spinner e não faz rerun
                 
     except Exception as e:
         st.error(f"❌ Erro na inicialização: {str(e)}")
@@ -60,35 +62,58 @@ def is_first_run():
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Verifica se existe tabela usuarios
+        # Verifica se existe tabela obras e se tem dados
         import os
         is_postgres = os.getenv('DATABASE_URL') is not None
         
         if is_postgres:
+            # Verifica se tabela existe
             cursor.execute("""
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables 
-                    WHERE table_schema = 'public' AND table_name = 'usuarios'
-                );
+                    WHERE table_schema = 'public' AND table_name = 'obras'
+                )
             """)
+            table_exists = cursor.fetchone()[0]
+            
+            if not table_exists:
+                cursor.close()
+                conn.close()
+                return True
+            
+            # Verifica se tem dados
+            cursor.execute("SELECT COUNT(*) as count FROM obras")
+            result = cursor.fetchone()
+            count = result['count'] if result else 0
+            
         else:
+            # SQLite
             cursor.execute("""
                 SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='usuarios';
+                WHERE type='table' AND name='obras'
             """)
+            table_exists = cursor.fetchone()
+            
+            if not table_exists:
+                cursor.close()
+                conn.close()
+                return True
+            
+            # Verifica se tem dados
+            cursor.execute("SELECT COUNT(*) as count FROM obras")
+            result = cursor.fetchone()
+            count = result['count'] if result else 0
         
-        result = cursor.fetchone()
         cursor.close()
         conn.close()
         
-        if is_postgres:
-            return not result[0]  # EXISTS retorna boolean
-        else:
-            return result is None  # sqlite retorna None se não existe
+        # Se não tem dados, é primeira execução
+        return count == 0
             
     except Exception as e:
         print(f"Erro ao verificar primeira execução: {repr(e)}", file=sys.stderr)
-        return True
+        # Em caso de erro, assume que NÃO é primeira execução para evitar loop
+        return False
 
 def create_initial_data():
     """Cria dados iniciais do sistema"""
@@ -101,6 +126,17 @@ def create_initial_data():
         
         import os
         is_postgres = os.getenv('DATABASE_URL') is not None
+        
+        # Verifica se já existem dados para evitar duplicação
+        cursor.execute("SELECT COUNT(*) as count FROM categorias")
+        result = cursor.fetchone()
+        categoria_count = result['count'] if result else 0
+        
+        if categoria_count > 0:
+            print("Dados iniciais já existem, pulando criação...", file=sys.stderr)
+            cursor.close()
+            conn.close()
+            return
         
         # Cria categorias padrão
         categorias_padrao = [
@@ -128,20 +164,26 @@ def create_initial_data():
                     VALUES (?, ?, ?, 1)
                 """, (nome, descricao, cor))
         
-        # Cria obra padrão
-        data_inicio = date.today()
-        data_fim = data_inicio + timedelta(days=365)
+        # Verifica se já existe obra
+        cursor.execute("SELECT COUNT(*) as count FROM obras")
+        result = cursor.fetchone()
+        obra_count = result['count'] if result else 0
         
-        if is_postgres:
-            cursor.execute("""
-                INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
-                VALUES (%s, %s, %s, %s, TRUE)
-            """, ("Minha Obra", 100000.00, data_inicio, data_fim))
-        else:
-            cursor.execute("""
-                INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
-                VALUES (?, ?, ?, ?, 1)
-            """, ("Minha Obra", 100000.00, data_inicio, data_fim))
+        if obra_count == 0:
+            # Cria obra padrão
+            data_inicio = date.today()
+            data_fim = data_inicio + timedelta(days=365)
+            
+            if is_postgres:
+                cursor.execute("""
+                    INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
+                    VALUES (%s, %s, %s, %s, TRUE)
+                """, ("Minha Obra", 100000.00, data_inicio, data_fim))
+            else:
+                cursor.execute("""
+                    INSERT INTO obras (nome, orcamento, data_inicio, data_fim_prevista, ativo)
+                    VALUES (?, ?, ?, ?, 1)
+                """, ("Minha Obra", 100000.00, data_inicio, data_fim))
         
         conn.commit()
         cursor.close()
@@ -151,7 +193,10 @@ def create_initial_data():
         
     except Exception as e:
         print(f"Erro ao criar dados iniciais: {repr(e)}", file=sys.stderr)
-        raise
+        if 'conn' in locals():
+            conn.rollback()
+            cursor.close()
+            conn.close()
 
 def show_main_interface():
     """Interface principal do sistema"""
@@ -251,13 +296,26 @@ def show_main_interface():
                 del st.session_state[key]
             st.rerun()
         
+        # Botão para forçar re-inicialização do banco
+        if st.button("🗃️ Recriar Banco", use_container_width=True, help="Recria todas as tabelas"):
+            try:
+                with st.spinner("Recriando banco de dados..."):
+                    init_db()
+                    create_initial_data()
+                    # Limpa flag de inicialização
+                    if 'db_initialized' in st.session_state:
+                        del st.session_state['db_initialized']
+                    st.success("✅ Banco recriado com sucesso!")
+            except Exception as e:
+                st.error(f"❌ Erro ao recriar banco: {str(e)}")
+        
         # Links úteis
         st.markdown("### 🔗 Links Úteis")
         st.markdown("""
         <div style="color: #333;">
-        📚 <a href="https://github.com"  style="color: #1f77b4;">Documentação</a><br>
-        🐛 <a href="https://github.com"  style="color: #1f77b4;">Reportar Bug</a><br>
-        💡 <a href="https://github.com"  style="color: #1f77b4;">Sugestões</a>
+        📚 <a href="https://github.com" target="_blank" style="color: #1f77b4;">Documentação</a><br>
+        🐛 <a href="https://github.com" target="_blank" style="color: #1f77b4;">Reportar Bug</a><br>
+        💡 <a href="https://github.com" target="_blank" style="color: #1f77b4;">Sugestões</a>
         </div>
         """, unsafe_allow_html=True)
         
@@ -291,7 +349,7 @@ def show_footer():
         st.caption("Controle completo dos gastos da sua obra")
     
     with col2:
-        st.markdown("### �� Funcionalidades")
+        st.markdown("### 📊 Funcionalidades")
         st.caption("✅ Dashboard interativo")
         st.caption("✅ Controle de lançamentos")
         st.caption("✅ Upload de comprovantes")
