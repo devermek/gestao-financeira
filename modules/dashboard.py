@@ -54,44 +54,6 @@ def show_dashboard():
     # GRÁFICO ÚNICO COMBINADO
     _show_grafico_distribuicao_completo(dados)
     
-def _show_metricas_principais(dados):
-    """Exibe métricas principais"""
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            label="💰 Total Gasto",
-            value=format_currency_br(dados['total_gasto']),
-            delta=None
-        )
-    
-    with col2:
-        st.metric(
-            label="🎯 Orçamento",
-            value=format_currency_br(dados['orcamento']),
-            delta=None
-        )
-    
-    with col3:
-        percentual = dados['percentual_executado']
-        delta_color = "normal" if percentual <= 100 else "inverse"
-        st.metric(
-            label="📈 % Executado",
-            value=f"{percentual:.1f}%",
-            delta=f"{percentual - 100:.1f}%" if percentual > 100 else None,
-            delta_color=delta_color
-        )
-    
-    with col4:
-        saldo = dados['saldo_restante']
-        delta_color = "normal" if saldo >= 0 else "inverse"
-        st.metric(
-            label="💵 Saldo Restante",
-            value=format_currency_br(saldo),
-            delta=None,
-            delta_color=delta_color
-        )
-
 def _show_ultimos_lancamentos_destacados(dados):
     """Lista dos últimos lançamentos com destaque especial"""
     st.markdown("""
