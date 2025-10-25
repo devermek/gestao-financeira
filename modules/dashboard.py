@@ -28,11 +28,41 @@ def show_dashboard():
             st.rerun()
         return
     
-    # Informações da obra
-    st.info(f"🏗️ **Obra:** {obra_config['nome']} | **Orçamento:** {format_currency_br(obra_config['orcamento'])}")
+    # DESTAQUE DO NOME DA OBRA - MUITO MAIOR E MAIS VISÍVEL
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        margin: 1.5rem 0;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        border: 2px solid #fff;
+    ">
+        <h1 style="
+            color: white;
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            letter-spacing: 2px;
+        ">🏗️ {obra_config['nome']}</h1>
+        <h2 style="
+            color: #f8f9fa;
+            font-size: 1.8rem;
+            margin: 0.5rem 0 0 0;
+            font-weight: 600;
+        ">Orçamento: {format_currency_br(obra_config['orcamento'])}</h2>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Métricas principais
     _show_metricas_principais(dados)
+    
+    st.markdown("---")
+    
+    # ÚLTIMOS LANÇAMENTOS PRIMEIRO - ANTES DOS GRÁFICOS
+    _show_ultimos_lancamentos_destacados(dados)
     
     st.markdown("---")
     
@@ -47,14 +77,8 @@ def show_dashboard():
     
     st.markdown("---")
     
-    # Últimos lançamentos e evolução
-    col3, col4 = st.columns([1, 1])
-    
-    with col3:
-        _show_ultimos_lancamentos(dados)
-    
-    with col4:
-        _show_evolucao_gastos()
+    # Evolução dos gastos
+    _show_evolucao_gastos()
 
 def _show_metricas_principais(dados):
     """Exibe métricas principais"""
@@ -94,6 +118,101 @@ def _show_metricas_principais(dados):
             delta_color=delta_color
         )
 
+def _show_ultimos_lancamentos_destacados(dados):
+    """Lista dos últimos lançamentos com destaque especial"""
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        margin: 1.5rem 0;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    ">
+        <h2 style="
+            color: white;
+            font-size: 2.2rem;
+            font-weight: bold;
+            margin: 0 0 1.5rem 0;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        ">📋 Últimos Lançamentos</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not dados['ultimos_lancamentos']:
+        st.markdown("""
+        <div style="
+            background: #f8f9fa;
+            padding: 2rem;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px dashed #dee2e6;
+        ">
+            <h3 style="color: #6c757d; margin: 0;">📝 Nenhum lançamento registrado ainda</h3>
+            <p style="color: #6c757d; margin: 0.5rem 0 0 0;">Adicione seu primeiro lançamento para começar!</p>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+    
+    # Container com fundo escuro para os lançamentos
+    for i, lancamento in enumerate(dados['ultimos_lancamentos']):
+        # Cores alternadas para melhor visualização
+        bg_color = "#2c3e50" if i % 2 == 0 else "#34495e"
+        
+        st.markdown(f"""
+        <div style="
+            background: {bg_color};
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1rem 0;
+            border-left: 5px solid {lancamento.get('categoria_cor', '#007bff')};
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                    <h3 style="
+                        color: white;
+                        font-size: 1.4rem;
+                        font-weight: bold;
+                        margin: 0 0 0.5rem 0;
+                        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+                    ">{lancamento['descricao']}</h3>
+                    <p style="
+                        color: #ecf0f1;
+                        font-size: 1.1rem;
+                        margin: 0;
+                        display: flex;
+                        align-items: center;
+                        gap: 0.5rem;
+                    ">
+                        <span style="
+                            background: {lancamento.get('categoria_cor', '#007bff')};
+                            padding: 0.3rem 0.8rem;
+                            border-radius: 20px;
+                            font-size: 0.9rem;
+                            font-weight: 600;
+                        ">🏷️ {lancamento['categoria_nome']}</span>
+                    </p>
+                </div>
+                <div style="text-align: right; min-width: 150px;">
+                    <h2 style="
+                        color: #2ecc71;
+                        font-size: 1.8rem;
+                        font-weight: bold;
+                        margin: 0 0 0.3rem 0;
+                        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+                    ">{format_currency_br(lancamento['valor'])}</h2>
+                    <p style="
+                        color: #bdc3c7;
+                        font-size: 1.1rem;
+                        margin: 0;
+                        font-weight: 500;
+                    ">📅 {format_date_br(lancamento['data_lancamento'])}</p>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 def _show_grafico_categorias(dados):
     """Gráfico de gastos por categoria"""
     st.subheader("🏷️ Gastos por Categoria")
@@ -119,7 +238,7 @@ def _show_grafico_categorias(dados):
         labels=nomes,
         values=valores,
         marker=dict(colors=cores),
-        hovertemplate='<b>%{label}</b><br>Valor: R$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
+        hovertemplate='<b>%{label}</b><br>Valor: R\$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
         textinfo='label+percent',
         textposition='auto'
     )])
@@ -162,7 +281,7 @@ def _show_progresso_orcamento(dados):
         labels=labels,
         values=values,
         marker=dict(colors=colors),
-        hovertemplate='<b>%{label}</b><br>Valor: R$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
+        hovertemplate='<b>%{label}</b><br>Valor: R\$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
         textinfo='label+percent',
         textposition='auto'
     )])
@@ -184,30 +303,6 @@ def _show_progresso_orcamento(dados):
         st.error(f"⚠️ Orçamento excedido em {format_currency_br(excesso)}")
     else:
         st.success(f"✅ Dentro do orçamento. Restam {format_currency_br(restante)}")
-
-def _show_ultimos_lancamentos(dados):
-    """Lista dos últimos lançamentos"""
-    st.subheader("📋 Últimos Lançamentos")
-    
-    if not dados['ultimos_lancamentos']:
-        st.info("📝 Nenhum lançamento registrado ainda.")
-        return
-    
-    for lancamento in dados['ultimos_lancamentos']:
-        with st.container():
-            col1, col2, col3 = st.columns([2, 1, 1])
-            
-            with col1:
-                st.write(f"**{lancamento['descricao']}**")
-                st.caption(f"🏷️ {lancamento['categoria_nome']}")
-            
-            with col2:
-                st.write(f"**{format_currency_br(lancamento['valor'])}**")
-            
-            with col3:
-                st.write(f"📅 {format_date_br(lancamento['data_lancamento'])}")
-            
-            st.markdown("---")
 
 def _show_evolucao_gastos():
     """Gráfico de evolução dos gastos"""
@@ -240,7 +335,7 @@ def _show_evolucao_gastos():
             name='Gastos Acumulados',
             line=dict(color='#007bff', width=3),
             marker=dict(size=6),
-            hovertemplate='Data: %{x}<br>Valor Acumulado: R$ %{y:,.2f}<extra></extra>'
+            hovertemplate='Data: %{x}<br>Valor Acumulado: R\$ %{y:,.2f}<extra></extra>'
         ))
         
         # Barras de gastos diários
@@ -249,13 +344,13 @@ def _show_evolucao_gastos():
             y=df['valor'],
             name='Gastos Diários',
             marker_color='rgba(0, 123, 255, 0.3)',
-            hovertemplate='Data: %{x}<br>Valor: R$ %{y:,.2f}<extra></extra>'
+            hovertemplate='Data: %{x}<br>Valor: R\$ %{y:,.2f}<extra></extra>'
         ))
         
         fig.update_layout(
             title="Evolução dos Gastos ao Longo do Tempo",
             xaxis_title="Data",
-            yaxis_title="Valor (R$)",
+            yaxis_title="Valor (R\$)",
             hovermode='x unified',
             height=400,
             margin=dict(t=50, b=50, l=50, r=50),
