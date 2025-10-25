@@ -211,6 +211,7 @@ def show_main_interface():
     
     # Sidebar com navegação
     with st.sidebar:
+        # CSS específico para sidebar
         st.markdown("""
         <style>
         .sidebar-content {
@@ -224,56 +225,102 @@ def show_main_interface():
             background-color: white !important;
             color: #333 !important;
         }
+        
+        /* Mobile: força sidebar visível */
+        @media (max-width: 768px) {
+            .css-1d391kg {
+                position: relative !important;
+                width: 100% !important;
+                min-width: 100% !important;
+                transform: none !important;
+            }
+            
+            .css-1d391kg .sidebar-content {
+                padding: 1rem !important;
+            }
+            
+            .stButton > button {
+                font-size: 16px !important;
+                padding: 12px 16px !important;
+                margin: 4px 0 !important;
+                width: 100% !important;
+            }
+        }
         </style>
         <div class="sidebar-content">
         """, unsafe_allow_html=True)
         
+        # Header da sidebar
         st.markdown("### 🧭 Navegação")
         
-        # Menu de navegação com ícones mais visíveis
-        page_options = [
-            "📊 Dashboard",
-            "💰 Lançamentos", 
-            "📈 Relatórios",
-            "⚙️ Configurações"
-        ]
+        # Detecta se é mobile (aproximação)
+        is_mobile = st.checkbox("📱 Modo Mobile", value=False, help="Ative para melhor experiência mobile")
         
-        # Usa session state para manter seleção
-        if 'current_page' not in st.session_state:
-            st.session_state.current_page = "📊 Dashboard"
-        
-        # Seletor de página
-        selected_page = st.selectbox(
-            "Selecione uma página:",
-            options=page_options,
-            index=page_options.index(st.session_state.current_page) if st.session_state.current_page in page_options else 0,
-            key="page_selector"
-        )
-        
-        # Atualiza session state
-        st.session_state.current_page = selected_page
-        
-        st.markdown("---")
-        
-        # Botões de navegação alternativos para mobile
-        st.markdown("### 📱 Navegação Rápida")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📊", help="Dashboard", use_container_width=True):
+        if is_mobile:
+            # Navegação simplificada para mobile
+            st.markdown("#### Acesso Rápido")
+            
+            if st.button("📊 Dashboard", use_container_width=True, key="nav_dashboard"):
                 st.session_state.current_page = "📊 Dashboard"
                 st.rerun()
-            if st.button("💰", help="Lançamentos", use_container_width=True):
+            
+            if st.button("💰 Lançamentos", use_container_width=True, key="nav_lancamentos"):
                 st.session_state.current_page = "💰 Lançamentos"
                 st.rerun()
-        
-        with col2:
-            if st.button("📈", help="Relatórios", use_container_width=True):
-                st.session_state.current_page = "📈 Relatórios"
+            
+            if st.button("📈 Relatórios", use_container_width=True, key="nav_relatorios"):
+                st.session_state.current_page = "�� Relatórios"
                 st.rerun()
-            if st.button("⚙️", help="Configurações", use_container_width=True):
+            
+            if st.button("⚙️ Configurações", use_container_width=True, key="nav_config"):
                 st.session_state.current_page = "⚙️ Configurações"
                 st.rerun()
+        
+        else:
+            # Navegação normal para desktop
+            page_options = [
+                "📊 Dashboard",
+                "💰 Lançamentos", 
+                "📈 Relatórios",
+                "⚙️ Configurações"
+            ]
+            
+            # Usa session state para manter seleção
+            if 'current_page' not in st.session_state:
+                st.session_state.current_page = "📊 Dashboard"
+            
+            # Seletor de página
+            selected_page = st.selectbox(
+                "Selecione uma página:",
+                options=page_options,
+                index=page_options.index(st.session_state.current_page) if st.session_state.current_page in page_options else 0,
+                key="page_selector"
+            )
+            
+            # Atualiza session state
+            st.session_state.current_page = selected_page
+            
+            st.markdown("---")
+            
+            # Botões de navegação alternativos
+            st.markdown("### 📱 Navegação Rápida")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📊", help="Dashboard", use_container_width=True):
+                    st.session_state.current_page = "📊 Dashboard"
+                    st.rerun()
+                if st.button("💰", help="Lançamentos", use_container_width=True):
+                    st.session_state.current_page = "💰 Lançamentos"
+                    st.rerun()
+            
+            with col2:
+                if st.button("📈", help="Relatórios", use_container_width=True):
+                    st.session_state.current_page = "📈 Relatórios"
+                    st.rerun()
+                if st.button("⚙️", help="Configurações", use_container_width=True):
+                    st.session_state.current_page = "⚙️ Configurações"
+                    st.rerun()
         
         st.markdown("---")
         
@@ -309,15 +356,48 @@ def show_main_interface():
             except Exception as e:
                 st.error(f"❌ Erro ao recriar banco: {str(e)}")
         
+        # Status do sistema
+        st.markdown("### 🔧 Status do Sistema")
+        
+        # Verifica conexão com banco
+        if test_connection():
+            st.success("🟢 Banco conectado")
+        else:
+            st.error("🔴 Erro no banco")
+        
+        # Informações da obra atual
+        try:
+            from utils.helpers import get_obra_config
+            obra = get_obra_config()
+            if obra and obra.get('id'):
+                st.info(f"🏗️ Obra: {obra['nome']}")
+            else:
+                st.warning("⚠️ Nenhuma obra configurada")
+        except:
+            st.error("❌ Erro ao carregar obra")
+        
+        st.markdown("---")
+        
         # Links úteis
         st.markdown("### 🔗 Links Úteis")
         st.markdown("""
         <div style="color: #333;">
-        📚 <a href="https://github.com" target="_blank" style="color: #1f77b4;">Documentação</a><br>
-        🐛 <a href="https://github.com" target="_blank" style="color: #1f77b4;">Reportar Bug</a><br>
-        💡 <a href="https://github.com" target="_blank" style="color: #1f77b4;">Sugestões</a>
+        📚 <a href="https://github.com"  style="color: #1f77b4;">Documentação</a><br>
+        🐛 <a href="https://github.com"  style="color: #1f77b4;">Reportar Bug</a><br>
+        💡 <a href="https://github.com"  style="color: #1f77b4;">Sugestões</a>
         </div>
         """, unsafe_allow_html=True)
+        
+        # Debug info (apenas em desenvolvimento)
+        if os.getenv('DEBUG', 'False').lower() == 'true':
+            st.markdown("---")
+            st.markdown("### 🐛 Debug Info")
+            st.json({
+                "session_state_keys": list(st.session_state.keys()),
+                "current_page": st.session_state.get('current_page', 'None'),
+                "db_initialized": st.session_state.get('db_initialized', False),
+                "database_url_exists": bool(os.getenv('DATABASE_URL'))
+            })
         
         st.markdown("</div>", unsafe_allow_html=True)
     
@@ -326,14 +406,130 @@ def show_main_interface():
         # Roteamento de páginas
         current_page = st.session_state.get('current_page', "📊 Dashboard")
         
-        if current_page == "📊 Dashboard":
-            show_dashboard()
-        elif current_page == "💰 Lançamentos":
-            show_lancamentos()
-        elif current_page == "📈 Relatórios":
-            show_relatorios()
-        elif current_page == "⚙️ Configurações":
-            show_configuracoes()
+        # Adiciona CSS mobile global
+        st.markdown("""
+        <style>
+        /* CSS Mobile Global */
+        @media (max-width: 768px) {
+            .main .block-container {
+                padding: 1rem 0.5rem;
+                max-width: 100%;
+            }
+            
+            .stButton > button {
+                font-size: 16px !important;
+                padding: 12px 16px !important;
+                margin: 4px 0 !important;
+                width: 100% !important;
+            }
+            
+            .stSelectbox > div > div {
+                font-size: 16px !important;
+            }
+            
+            .stTextInput > div > div > input {
+                font-size: 16px !important;
+                padding: 12px !important;
+            }
+            
+            .stNumberInput > div > div > input {
+                font-size: 16px !important;
+                padding: 12px !important;
+            }
+            
+            .stTextArea > div > div > textarea {
+                font-size: 16px !important;
+                padding: 12px !important;
+            }
+            
+            /* Força sidebar sempre visível em mobile */
+            .css-1d391kg {
+                position: relative !important;
+                width: 100% !important;
+                min-width: 100% !important;
+                transform: none !important;
+                left: 0 !important;
+            }
+            
+            /* Melhora métricas em mobile */
+            [data-testid="metric-container"] {
+                margin: 8px 0 !important;
+                padding: 12px !important;
+            }
+            
+            /* Melhora gráficos em mobile */
+            .js-plotly-plot {
+                width: 100% !important;
+            }
+            
+            .plotly-graph-div {
+                width: 100% !important;
+            }
+        }
+        
+        /* Melhora geral da interface */
+        .stMetric {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 0.5rem 0;
+        }
+        
+        .stAlert {
+            border-radius: 8px;
+            margin: 0.5rem 0;
+        }
+        
+        /* Botão flutuante para mobile */
+        .mobile-nav-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 999;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Navegação de páginas
+        try:
+            if current_page == "📊 Dashboard":
+                show_dashboard()
+            elif current_page == "💰 Lançamentos":
+                show_lancamentos()
+            elif current_page == "�� Relatórios":
+                show_relatorios()
+            elif current_page == "⚙️ Configurações":
+                show_configuracoes()
+            else:
+                # Página padrão
+                st.session_state.current_page = "📊 Dashboard"
+                show_dashboard()
+                
+        except Exception as e:
+            st.error("🚨 Erro ao carregar página!")
+            
+            # Em desenvolvimento, mostra detalhes do erro
+            if os.getenv('DEBUG', 'False').lower() == 'true':
+                st.exception(e)
+            else:
+                st.info("Por favor, tente navegar para outra página ou recarregue o sistema.")
+            
+            # Log do erro
+            print(f"Erro ao carregar página {current_page}: {repr(e)}", file=sys.stderr)
+            
+            # Botão para voltar ao dashboard
+            if st.button("🏠 Voltar ao Dashboard"):
+                st.session_state.current_page = "📊 Dashboard"
+                st.rerun()
     
     # Footer
     show_footer()
@@ -376,7 +572,7 @@ def init_session_state():
         st.session_state.current_page = "📊 Dashboard"
     
     # Remove estados problemáticos se existirem
-    problematic_keys = ['show_user_config', 'editing_lancamento_', 'authenticated', 'user']
+    problematic_keys = ['show_user_config', 'authenticated', 'user']
     for key in list(st.session_state.keys()):
         if any(prob_key in key for prob_key in problematic_keys):
             del st.session_state[key]
@@ -403,6 +599,14 @@ def handle_errors():
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
+
+def show_mobile_menu():
+    """Menu especial para dispositivos móveis"""
+    st.markdown("""
+    <div class="mobile-nav-btn" onclick="document.querySelector('.css-1d391kg').style.display = 'block';">
+        📱
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     # Inicializa estado da sessão
