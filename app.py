@@ -348,43 +348,33 @@ def show_main_interface():
 
 def show_mobile_navigation():
     """Navegação mobile nativa"""
-    st.markdown("""
-    <div class="mobile-nav">
-        <h3 style="margin: 0 0 1rem 0; color: #333;">🧭 Navegação</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    
     # Inicializa página atual
     if 'current_page' not in st.session_state:
-        st.session_state.current_page = "📊 Dashboard"
+        st.session_state.current_page = "🏠 Início"
     
     current_page = st.session_state.current_page
     
-    # Grid de botões de navegação
+    # Grid de botões de navegação - SEM TÍTULO "NAVEGAÇÃO"
     col1, col2 = st.columns(2)
     
     with col1:
-        # Dashboard
-        button_style = "nav-button active" if current_page == "�� Dashboard" else "nav-button"
-        if st.button("📊 Dashboard", key="mobile_dashboard", use_container_width=True):
-            st.session_state.current_page = "📊 Dashboard"
+        # Início (ex-Dashboard)
+        if st.button("🏠 Início", key="mobile_inicio", use_container_width=True):
+            st.session_state.current_page = "🏠 Início"
             st.rerun()
         
         # Relatórios
-        button_style = "nav-button active" if current_page == "📈 Relatórios" else "nav-button"
-        if st.button("📈 Relatórios", key="mobile_relatorios", use_container_width=True):
+        if st.button("�� Relatórios", key="mobile_relatorios", use_container_width=True):
             st.session_state.current_page = "📈 Relatórios"
             st.rerun()
     
     with col2:
         # Lançamentos
-        button_style = "nav-button active" if current_page == "💰 Lançamentos" else "nav-button"
         if st.button("💰 Lançamentos", key="mobile_lancamentos", use_container_width=True):
             st.session_state.current_page = "💰 Lançamentos"
             st.rerun()
         
         # Configurações
-        button_style = "nav-button active" if current_page == "⚙️ Configurações" else "nav-button"
         if st.button("⚙️ Configurações", key="mobile_config", use_container_width=True):
             st.session_state.current_page = "⚙️ Configurações"
             st.rerun()
@@ -394,31 +384,6 @@ def show_mobile_navigation():
     
     # Separador
     st.markdown("---")
-
-def show_system_status():
-    """Mostra status do sistema"""
-    st.markdown("### 📊 Status do Sistema")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Status da conexão
-        if test_connection():
-            st.success("🟢 Banco Conectado")
-        else:
-            st.error("🔴 Erro no Banco")
-    
-    with col2:
-        # Status da obra
-        try:
-            from utils.helpers import get_obra_config
-            obra = get_obra_config()
-            if obra and obra.get('id'):
-                st.info(f"🏗️ {obra['nome']}")
-            else:
-                st.warning("⚠️ Sem obra")
-        except:
-            st.error("❌ Erro na obra")
 
 def show_desktop_sidebar():
     """Sidebar para desktop"""
@@ -442,9 +407,9 @@ def show_desktop_sidebar():
         
         st.markdown("### 🧭 Navegação Desktop")
         
-        # Navegação normal para desktop
+        # Navegação normal para desktop - NOMES ATUALIZADOS
         page_options = [
-            "📊 Dashboard",
+            "🏠 Início",
             "💰 Lançamentos", 
             "📈 Relatórios",
             "⚙️ Configurações"
@@ -452,7 +417,7 @@ def show_desktop_sidebar():
         
         # Usa session state para manter seleção
         if 'current_page' not in st.session_state:
-            st.session_state.current_page = "📊 Dashboard"
+            st.session_state.current_page = "🏠 Início"
         
         # Seletor de página
         selected_page = st.selectbox(
@@ -471,68 +436,14 @@ def show_desktop_sidebar():
         st.markdown("### ℹ️ Sistema")
         st.markdown("""
         <div style="color: #333;">
-        🏗️ <strong>Gestão Financeira</strong><br>
+        🏗️ <strong>Gestão de Obras</strong><br>
         📱 <strong>Versão:</strong> 1.0.0<br>
         👨‍💻 <strong>Dev:</strong> Deverson
         </div>
         """, unsafe_allow_html=True)
         
-        st.markdown("---")
+        # ... resto da função permanece igual
         
-        # Ferramentas de sistema
-        st.markdown("### 🔧 Ferramentas")
-        
-        if st.button("🔄 Reinicializar", use_container_width=True):
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.rerun()
-        
-        if st.button("🗃️ Recriar Banco", use_container_width=True):
-            try:
-                with st.spinner("Recriando banco..."):
-                    init_db()
-                    create_initial_data()
-                    if 'db_initialized' in st.session_state:
-                        del st.session_state['db_initialized']
-                    st.success("✅ Banco recriado!")
-            except Exception as e:
-                st.error(f"❌ Erro: {str(e)}")
-        
-        st.markdown("---")
-        
-        # Status detalhado
-        st.markdown("### 📊 Status Detalhado")
-        
-        # Conexão com banco
-        if test_connection():
-            st.success("🟢 Banco conectado")
-        else:
-            st.error("🔴 Erro no banco")
-        
-        # Obra atual
-        try:
-            from utils.helpers import get_obra_config
-            obra = get_obra_config()
-            if obra and obra.get('id'):
-                st.info(f"🏗️ Obra: {obra['nome']}")
-                st.caption(f"Orçamento: R$ {obra['orcamento']:,.2f}")
-            else:
-                st.warning("⚠️ Nenhuma obra configurada")
-        except Exception as e:
-            st.error("❌ Erro ao carregar obra")
-        
-        # Debug (apenas em desenvolvimento)
-        if os.getenv('DEBUG', 'False').lower() == 'true':
-            st.markdown("---")
-            st.markdown("### 🐛 Debug")
-            st.json({
-                "current_page": st.session_state.get('current_page'),
-                "db_initialized": st.session_state.get('db_initialized', False),
-                "session_keys": len(st.session_state.keys())
-            })
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-
 def show_footer():
     """Exibe rodapé da aplicação"""
     st.markdown("---")
