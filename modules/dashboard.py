@@ -117,7 +117,7 @@ def show_gastos_por_categoria(gastos_categoria):
         textinfo='label+percent',
         textposition='auto',
         hovertemplate='<b>%{label}</b><br>' +
-                      'Valor: R\$ %{value:,.2f}<br>' +
+                      'Valor: R$ %{value:,.2f}<br>' +
                       'Percentual: %{percent}<br>' +
                       '<extra></extra>'
     )])
@@ -227,7 +227,7 @@ def show_evolucao_gastos():
         
         fig.update_layout(
             xaxis_title="Mês",
-            yaxis_title="Valor (R\$)",
+            yaxis_title="Valor (R$)",
             height=400,
             margin=dict(t=20, b=20, l=20, r=20),
             paper_bgcolor='rgba(0,0,0,0)',
