@@ -10,11 +10,7 @@ from utils.helpers import get_dados_dashboard, get_obra_config, format_currency_
 def show_dashboard():
     """Exibe dashboard principal"""
     
-    # Botão mobile para abrir sidebar
-    if st.button("📱 Menu", key="mobile_menu", help="Abrir menu de navegação"):
-        st.sidebar.write("") # Força abertura da sidebar
-    
-    st.title("📊 Dashboard Financeiro")
+    st.title("🏠 Início")
     
     # Carrega dados
     with st.spinner("Carregando dados..."):
@@ -22,63 +18,24 @@ def show_dashboard():
         obra_config = get_obra_config()
     
     if not obra_config or not obra_config.get('id'):
-        st.warning("⚠️ Configure uma obra para visualizar o dashboard!")
+        st.warning("⚠️ Configure uma obra para visualizar o painel!")
         if st.button("🔧 Ir para Configurações"):
             st.session_state.current_page = "⚙️ Configurações"
             st.rerun()
         return
-    
-    # DESTAQUE DO NOME DA OBRA - MUITO MAIOR E MAIS VISÍVEL
-    st.markdown(f"""
-    <div style="
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
-        border-radius: 15px;
-        margin: 1.5rem 0;
-        text-align: center;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        border: 2px solid #fff;
-    ">
-        <h1 style="
-            color: white;
-            font-size: 3rem;
-            font-weight: bold;
-            margin: 0;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            letter-spacing: 2px;
-        ">🏗️ {obra_config['nome']}</h1>
-        <h2 style="
-            color: #f8f9fa;
-            font-size: 1.8rem;
-            margin: 0.5rem 0 0 0;
-            font-weight: 600;
-        ">Orçamento: {format_currency_br(obra_config['orcamento'])}</h2>
-    </div>
-    """, unsafe_allow_html=True)
     
     # Métricas principais
     _show_metricas_principais(dados)
     
     st.markdown("---")
     
-    # ÚLTIMOS LANÇAMENTOS PRIMEIRO - ANTES DOS GRÁFICOS
+    # ÚLTIMOS LANÇAMENTOS PRIMEIRO
     _show_ultimos_lancamentos_destacados(dados)
     
     st.markdown("---")
     
-    # Gráficos
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        _show_grafico_categorias(dados)
-    
-    with col2:
-        _show_progresso_orcamento(dados)
-    
-    st.markdown("---")
-    
-    # Evolução dos gastos
-    _show_evolucao_gastos()
+    # GRÁFICO ÚNICO COMBINADO
+    _show_grafico_distribuicao_completo(dados)
 
 def _show_metricas_principais(dados):
     """Exibe métricas principais"""
@@ -213,9 +170,9 @@ def _show_ultimos_lancamentos_destacados(dados):
         </div>
         """, unsafe_allow_html=True)
 
-def _show_grafico_categorias(dados):
-    """Gráfico de gastos por categoria"""
-    st.subheader("🏷️ Gastos por Categoria")
+def _show_grafico_distribuicao_completo(dados):
+    """Gráfico único com distribuição de gastos por categoria com % do orçamento total"""
+    st.subheader("📊 Distribuição de Gastos por Categoria")
     
     if not dados['gastos_por_categoria']:
         st.info("📝 Nenhum gasto registrado ainda.")
@@ -229,265 +186,103 @@ def _show_grafico_categorias(dados):
         return
     
     # Prepara dados para o gráfico
+    orcamento_total = dados['orcamento']
+    
+    # Calcula percentuais em relação ao orçamento total
+    for categoria in categorias_com_gastos:
+        if orcamento_total > 0:
+            categoria['percentual_orcamento'] = (categoria['valor'] / orcamento_total) * 100
+        else:
+            categoria['percentual_orcamento'] = 0
+    
     nomes = [cat['nome'] for cat in categorias_com_gastos]
     valores = [cat['valor'] for cat in categorias_com_gastos]
     cores = [cat['cor'] for cat in categorias_com_gastos]
+    percentuais_orcamento = [cat['percentual_orcamento'] for cat in categorias_com_gastos]
     
-    # Cria gráfico de pizza
+    # Cria gráfico de pizza com informações detalhadas
     fig = go.Figure(data=[go.Pie(
         labels=nomes,
         values=valores,
         marker=dict(colors=cores),
-        hovertemplate='<b>%{label}</b><br>Valor: R\$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
+        hovertemplate='<b>%{label}</b><br>' +
+                     'Valor: R\$ %{value:,.2f}<br>' +
+                     'Do Total Gasto: %{percent}<br>' +
+                     'Do Orçamento Total: %{customdata:.1f}%<extra></extra>',
+        customdata=percentuais_orcamento,
         textinfo='label+percent',
-        textposition='auto'
+        textposition='auto',
+        textfont=dict(size=12, color='white')
     )])
     
     fig.update_layout(
-        title="Distribuição de Gastos por Categoria",
+        title={
+            'text': "Distribuição de Gastos por Categoria<br><sub>Percentuais em relação ao total gasto</sub>",
+            'x': 0.5,
+            'xanchor': 'center'
+        },
         showlegend=True,
-        height=400,
-        margin=dict(t=50, b=50, l=50, r=50)
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-
-def _show_progresso_orcamento(dados):
-    """Gráfico de progresso do orçamento"""
-    st.subheader("🎯 Progresso do Orçamento")
-    
-    if dados['orcamento'] <= 0:
-        st.info("📝 Configure um orçamento para visualizar o progresso.")
-        return
-    
-    # Calcula valores
-    gasto = dados['total_gasto']
-    orcamento = dados['orcamento']
-    restante = max(0, orcamento - gasto)
-    excesso = max(0, gasto - orcamento)
-    
-    # Prepara dados
-    if excesso > 0:
-        labels = ['Gasto dentro do orçamento', 'Excesso']
-        values = [orcamento, excesso]
-        colors = ['#28a745', '#dc3545']
-    else:
-        labels = ['Gasto', 'Restante']
-        values = [gasto, restante]
-        colors = ['#007bff', '#e9ecef']
-    
-    # Cria gráfico
-    fig = go.Figure(data=[go.Pie(
-        labels=labels,
-        values=values,
-        marker=dict(colors=colors),
-        hovertemplate='<b>%{label}</b><br>Valor: R\$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
-        textinfo='label+percent',
-        textposition='auto'
-    )])
-    
-    fig.update_layout(
-        title="Execução do Orçamento",
-        showlegend=True,
-        height=400,
-        margin=dict(t=50, b=50, l=50, r=50)
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Barra de progresso
-    percentual = min(100, (gasto / orcamento) * 100)
-    st.progress(percentual / 100)
-    
-    if excesso > 0:
-        st.error(f"⚠️ Orçamento excedido em {format_currency_br(excesso)}")
-    else:
-        st.success(f"✅ Dentro do orçamento. Restam {format_currency_br(restante)}")
-
-def _show_evolucao_gastos():
-    """Gráfico de evolução dos gastos"""
-    st.subheader("📈 Evolução dos Gastos")
-    
-    try:
-        # Busca dados de evolução
-        dados_evolucao = _get_dados_evolucao()
-        
-        if not dados_evolucao:
-            st.info("📝 Dados insuficientes para gerar gráfico de evolução.")
-            return
-        
-        # Converte para DataFrame
-        df = pd.DataFrame(dados_evolucao)
-        df['data'] = pd.to_datetime(df['data'])
-        df = df.sort_values('data')
-        
-        # Calcula acumulado
-        df['valor_acumulado'] = df['valor'].cumsum()
-        
-        # Cria gráfico
-        fig = go.Figure()
-        
-        # Linha de gastos acumulados
-        fig.add_trace(go.Scatter(
-            x=df['data'],
-            y=df['valor_acumulado'],
-            mode='lines+markers',
-            name='Gastos Acumulados',
-            line=dict(color='#007bff', width=3),
-            marker=dict(size=6),
-            hovertemplate='Data: %{x}<br>Valor Acumulado: R\$ %{y:,.2f}<extra></extra>'
-        ))
-        
-        # Barras de gastos diários
-        fig.add_trace(go.Bar(
-            x=df['data'],
-            y=df['valor'],
-            name='Gastos Diários',
-            marker_color='rgba(0, 123, 255, 0.3)',
-            hovertemplate='Data: %{x}<br>Valor: R\$ %{y:,.2f}<extra></extra>'
-        ))
-        
-        fig.update_layout(
-            title="Evolução dos Gastos ao Longo do Tempo",
-            xaxis_title="Data",
-            yaxis_title="Valor (R\$)",
-            hovermode='x unified',
-            height=400,
-            margin=dict(t=50, b=50, l=50, r=50),
-            showlegend=True
+        height=500,
+        margin=dict(t=80, b=50, l=50, r=50),
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="left",
+            x=1.05
         )
-        
-        # Atualiza eixos corretamente
-        fig.update_xaxes(showgrid=True, gridcolor='#f0f0f0')
-        fig.update_yaxes(showgrid=True, gridcolor='#f0f0f0', tickformat=',.0f')
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-    except Exception as e:
-        print(f"Erro ao gerar gráfico de evolução: {repr(e)}", file=sys.stderr)
-        st.error("❌ Erro ao carregar gráfico de evolução.")
-
-def _get_dados_evolucao():
-    """Busca dados para gráfico de evolução"""
-    try:
-        from config.database import get_connection
-        
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        import os
-        is_postgres = os.getenv('DATABASE_URL') is not None
-        
-        if is_postgres:
-            query = """
-                SELECT 
-                    l.data_lancamento as data,
-                    SUM(l.valor) as valor
-                FROM lancamentos l
-                JOIN obras o ON l.obra_id = o.id
-                WHERE o.ativo = TRUE
-                GROUP BY l.data_lancamento
-                ORDER BY l.data_lancamento
-            """
-        else:
-            query = """
-                SELECT 
-                    l.data_lancamento as data,
-                    SUM(l.valor) as valor
-                FROM lancamentos l
-                JOIN obras o ON l.obra_id = o.id
-                WHERE o.ativo = 1
-                GROUP BY l.data_lancamento
-                ORDER BY l.data_lancamento
-            """
-        
-        cursor.execute(query)
-        
-        dados = []
-        for row in cursor.fetchall():
-            valor = 0.0
-            try:
-                if row['valor'] is not None:
-                    from decimal import Decimal
-                    if isinstance(row['valor'], Decimal):
-                        valor = float(row['valor'])
-                    else:
-                        valor = float(row['valor'])
-            except (TypeError, ValueError):
-                valor = 0.0
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Tabela detalhada abaixo do gráfico
+    st.markdown("### 📋 Detalhamento por Categoria")
+    
+    # Cria tabela com informações detalhadas
+    for categoria in categorias_com_gastos:
+        with st.expander(f"🏷️ {categoria['nome']} - {format_currency_br(categoria['valor'])}"):
+            col1, col2, col3 = st.columns(3)
             
-            dados.append({
-                'data': row['data'],
-                'valor': valor
-            })
-        
-        return dados
-        
-    except Exception as e:
-        print(f"Erro ao buscar dados de evolução: {repr(e)}", file=sys.stderr)
-        return []
-    finally:
-        try:
-            cursor.close()
-            conn.close()
-        except:
-            pass
-
-def _show_resumo_categorias():
-    """Resumo detalhado por categorias"""
-    st.subheader("📊 Resumo por Categorias")
+            with col1:
+                st.metric(
+                    "Valor Gasto",
+                    format_currency_br(categoria['valor'])
+                )
+            
+            with col2:
+                st.metric(
+                    "% do Total Gasto",
+                    f"{categoria['percentual']:.1f}%"
+                )
+            
+            with col3:
+                st.metric(
+                    "% do Orçamento Total",
+                    f"{categoria['percentual_orcamento']:.1f}%"
+                )
     
-    try:
-        from utils.helpers import get_resumo_categorias
-        
-        resumo = get_resumo_categorias()
-        
-        if not resumo:
-            st.info("📝 Nenhum dado disponível.")
-            return
-        
-        # Cria tabela
-        for categoria in resumo:
-            if categoria['total_valor'] > 0:  # Só mostra categorias com gastos
-                with st.expander(f"🏷️ {categoria['nome']} - {format_currency_br(categoria['total_valor'])}"):
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.metric("Total de Lançamentos", categoria['total_lancamentos'])
-                    
-                    with col2:
-                        st.metric("Valor Total", format_currency_br(categoria['total_valor']))
-                    
-                    with col3:
-                        st.metric("Valor Médio", format_currency_br(categoria['valor_medio']))
-        
-    except Exception as e:
-        print(f"Erro ao mostrar resumo de categorias: {repr(e)}", file=sys.stderr)
-        st.error("❌ Erro ao carregar resumo de categorias.")
-
-def show_mobile_navigation():
-    """Navegação especial para mobile"""
-    st.markdown("### 📱 Navegação Rápida")
-    
-    # Botões grandes para mobile
-    col1, col2 = st.columns(2)
+    # Resumo final
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("💰 Novo Lançamento", use_container_width=True, key="mobile_lancamento"):
-            st.session_state.current_page = "💰 Lançamentos"
-            st.rerun()
-        
-        if st.button("📈 Relatórios", use_container_width=True, key="mobile_relatorios"):
-            st.session_state.current_page = "📈 Relatórios"
-            st.rerun()
+        st.metric(
+            "Total Gasto",
+            format_currency_br(dados['total_gasto'])
+        )
     
     with col2:
-        if st.button("⚙️ Configurações", use_container_width=True, key="mobile_config"):
-            st.session_state.current_page = "⚙️ Configurações"
-            st.rerun()
-        
-        if st.button("🔄 Atualizar", use_container_width=True, key="mobile_refresh"):
-            st.rerun()
+        st.metric(
+            "Orçamento Total",
+            format_currency_br(dados['orcamento'])
+        )
+    
+    with col3:
+        percentual_usado = (dados['total_gasto'] / dados['orcamento'] * 100) if dados['orcamento'] > 0 else 0
+        st.metric(
+            "% Orçamento Usado",
+            f"{percentual_usado:.1f}%"
+        )
 
 # Adiciona CSS para melhorar mobile
 def add_mobile_css():
@@ -507,29 +302,7 @@ def add_mobile_css():
         }
         
         .plotly-graph-div {
-            height: 300px !important;
-        }
-        
-        /* Força sidebar a ser visível */
-        .css-1d391kg {
-            position: relative !important;
-            width: 100% !important;
-            min-width: 100% !important;
-        }
-        
-        /* Botão de menu mobile */
-        .mobile-menu-btn {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            z-index: 999;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            font-size: 20px;
+            height: 400px !important;
         }
     }
     

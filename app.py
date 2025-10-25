@@ -4,7 +4,7 @@ import os
 
 # Configuração da página (deve ser a primeira chamada Streamlit)
 st.set_page_config(
-    page_title="Sistema de Gestão Financeira - Obras",
+    page_title="Gestão de Obras",
     page_icon="🏗️",
     layout="wide",
     initial_sidebar_state="collapsed"  # Mudado para collapsed no mobile
@@ -213,6 +213,16 @@ def show_main_interface():
         text-align: center;
     }
     
+    .obra-destaque {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        margin: 1rem 0;
+        text-align: center;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        border: 2px solid #fff;
+    }
+    
     .mobile-nav {
         background: #f8f9fa;
         padding: 1rem;
@@ -288,17 +298,47 @@ def show_main_interface():
         .mobile-nav {
             display: none;
         }
+        
+        .obra-destaque {
+            display: none;
+        }
     }
     </style>
     """, unsafe_allow_html=True)
     
-    # Cabeçalho principal
+    # Cabeçalho principal - TÍTULO ALTERADO
     st.markdown("""
     <div class="main-header">
-        <h1 style="margin: 0;">🏗️ Sistema de Gestão Financeira</h1>
+        <h1 style="margin: 0;">🏗️ Gestão de Obras</h1>
         <p style="margin: 0; opacity: 0.9;">Controle completo dos gastos da sua obra</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # NOME DA OBRA DESTACADO - APENAS NO MOBILE
+    try:
+        from utils.helpers import get_obra_config, format_currency_br
+        obra_config = get_obra_config()
+        if obra_config and obra_config.get('id'):
+            st.markdown(f"""
+            <div class="obra-destaque">
+                <h1 style="
+                    color: white;
+                    font-size: 2.5rem;
+                    font-weight: bold;
+                    margin: 0;
+                    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+                    letter-spacing: 2px;
+                ">🏗️ {obra_config['nome']}</h1>
+                <h2 style="
+                    color: #f8f9fa;
+                    font-size: 1.5rem;
+                    margin: 0.5rem 0 0 0;
+                    font-weight: 600;
+                ">Orçamento: {format_currency_br(obra_config['orcamento'])}</h2>
+            </div>
+            """, unsafe_allow_html=True)
+    except Exception as e:
+        print(f"Erro ao carregar obra para destaque: {repr(e)}", file=sys.stderr)
     
     # Navegação mobile (visível apenas em telas pequenas)
     show_mobile_navigation()
@@ -308,22 +348,22 @@ def show_main_interface():
     
     # Container principal
     with st.container():
-        # Roteamento de páginas
-        current_page = st.session_state.get('current_page', "📊 Dashboard")
+        # Roteamento de páginas - NOMES ATUALIZADOS
+        current_page = st.session_state.get('current_page', "🏠 Início")
         
         # Navegação de páginas
         try:
-            if current_page == "📊 Dashboard":
+            if current_page == "🏠 Início":
                 show_dashboard()
             elif current_page == "💰 Lançamentos":
                 show_lancamentos()
-            elif current_page == "📈 Relatórios":
+            elif current_page == "�� Relatórios":
                 show_relatorios()
             elif current_page == "⚙️ Configurações":
                 show_configuracoes()
             else:
                 # Página padrão
-                st.session_state.current_page = "📊 Dashboard"
+                st.session_state.current_page = "🏠 Início"
                 show_dashboard()
                 
         except Exception as e:
@@ -338,9 +378,9 @@ def show_main_interface():
             # Log do erro
             print(f"Erro ao carregar página {current_page}: {repr(e)}", file=sys.stderr)
             
-            # Botão para voltar ao dashboard
-            if st.button("🏠 Voltar ao Dashboard"):
-                st.session_state.current_page = "📊 Dashboard"
+            # Botão para voltar ao início
+            if st.button("🏠 Voltar ao Início"):
+                st.session_state.current_page = "🏠 Início"
                 st.rerun()
     
     # Footer
@@ -364,8 +404,8 @@ def show_mobile_navigation():
             st.rerun()
         
         # Relatórios
-        if st.button("�� Relatórios", key="mobile_relatorios", use_container_width=True):
-            st.session_state.current_page = "📈 Relatórios"
+        if st.button("📈 Relatórios", key="mobile_relatorios", use_container_width=True):
+            st.session_state.current_page = "�� Relatórios"
             st.rerun()
     
     with col2:
@@ -384,6 +424,31 @@ def show_mobile_navigation():
     
     # Separador
     st.markdown("---")
+
+def show_system_status():
+    """Mostra status do sistema"""
+    st.markdown("### 📊 Status do Sistema")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Status da conexão
+        if test_connection():
+            st.success("🟢 Banco Conectado")
+        else:
+            st.error("�� Erro no Banco")
+    
+    with col2:
+        # Status da obra
+        try:
+            from utils.helpers import get_obra_config
+            obra = get_obra_config()
+            if obra and obra.get('id'):
+                st.info(f"🏗️ {obra['nome']}")
+            else:
+                st.warning("⚠️ Sem obra")
+        except:
+            st.error("❌ Erro na obra")
 
 def show_desktop_sidebar():
     """Sidebar para desktop"""
@@ -442,8 +507,62 @@ def show_desktop_sidebar():
         </div>
         """, unsafe_allow_html=True)
         
-        # ... resto da função permanece igual
+        st.markdown("---")
         
+        # Ferramentas de sistema
+        st.markdown("### 🔧 Ferramentas")
+        
+        if st.button("🔄 Reinicializar", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
+        
+        if st.button("🗃️ Recriar Banco", use_container_width=True):
+            try:
+                with st.spinner("Recriando banco..."):
+                    init_db()
+                    create_initial_data()
+                    if 'db_initialized' in st.session_state:
+                        del st.session_state['db_initialized']
+                    st.success("✅ Banco recriado!")
+            except Exception as e:
+                st.error(f"❌ Erro: {str(e)}")
+        
+        st.markdown("---")
+        
+        # Status detalhado
+        st.markdown("### 📊 Status Detalhado")
+        
+        # Conexão com banco
+        if test_connection():
+            st.success("🟢 Banco conectado")
+        else:
+            st.error("🔴 Erro no banco")
+        
+        # Obra atual
+        try:
+            from utils.helpers import get_obra_config, format_currency_br
+            obra = get_obra_config()
+            if obra and obra.get('id'):
+                st.info(f"🏗️ Obra: {obra['nome']}")
+                st.caption(f"Orçamento: {format_currency_br(obra['orcamento'])}")
+            else:
+                st.warning("⚠️ Nenhuma obra configurada")
+        except Exception as e:
+            st.error("❌ Erro ao carregar obra")
+        
+        # Debug (apenas em desenvolvimento)
+        if os.getenv('DEBUG', 'False').lower() == 'true':
+            st.markdown("---")
+            st.markdown("### 🐛 Debug")
+            st.json({
+                "current_page": st.session_state.get('current_page'),
+                "db_initialized": st.session_state.get('db_initialized', False),
+                "session_keys": len(st.session_state.keys())
+            })
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+
 def show_footer():
     """Exibe rodapé da aplicação"""
     st.markdown("---")
@@ -453,12 +572,12 @@ def show_footer():
     
     with col1:
         st.markdown("#### 🏗️ Sistema")
-        st.caption("Gestão Financeira de Obras")
+        st.caption("Gestão de Obras")
         st.caption("Controle completo de gastos")
     
     with col2:
         st.markdown("#### 📊 Recursos")
-        st.caption("✅ Dashboard interativo")
+        st.caption("✅ Painel interativo")
         st.caption("✅ Controle de lançamentos")
         st.caption("✅ Relatórios detalhados")
     
@@ -471,7 +590,7 @@ def show_footer():
     st.markdown("---")
     st.markdown(
         "<div style='text-align: center; color: #888; font-size: 0.8em;'>"
-        "© 2024 Sistema de Gestão Financeira para Obras"
+        "© 2024 Sistema de Gestão de Obras"
         "</div>",
         unsafe_allow_html=True
     )
@@ -479,7 +598,7 @@ def show_footer():
 def init_session_state():
     """Inicializa variáveis de sessão"""
     if 'current_page' not in st.session_state:
-        st.session_state.current_page = "📊 Dashboard"
+        st.session_state.current_page = "🏠 Início"  # NOME ATUALIZADO
     
     # Remove estados problemáticos se existirem
     problematic_keys = ['show_user_config', 'authenticated', 'user']
