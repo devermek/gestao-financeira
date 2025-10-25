@@ -206,7 +206,7 @@ def _show_grafico_distribuicao_completo(dados):
         values=valores,
         marker=dict(colors=cores),
         hovertemplate='<b>%{label}</b><br>' +
-                     'Valor: R\$ %{value:,.2f}<br>' +
+                     'Valor: R$ %{value:,.2f}<br>' +
                      'Do Total Gasto: %{percent}<br>' +
                      'Do Orçamento Total: %{customdata:.1f}%<extra></extra>',
         customdata=percentuais_orcamento,
