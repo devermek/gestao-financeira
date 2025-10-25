@@ -40,6 +40,38 @@ def get_connection():
         print(f"Erro ao conectar com banco de dados: {repr(e)}", file=sys.stderr)
         raise
 
+def test_connection():
+    """Testa a conexão com o banco de dados"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Teste simples
+        if os.getenv('DATABASE_URL'):
+            cursor.execute("SELECT 1 as test;")
+            result = cursor.fetchone()
+            if result:
+                print("✅ PostgreSQL conectado com sucesso", file=sys.stderr)
+            else:
+                print("❌ PostgreSQL: Sem resposta", file=sys.stderr)
+                return False
+        else:
+            cursor.execute("SELECT 1 as test;")
+            result = cursor.fetchone()
+            if result:
+                print("✅ SQLite conectado com sucesso", file=sys.stderr)
+            else:
+                print("❌ SQLite: Sem resposta", file=sys.stderr)
+                return False
+        
+        cursor.close()
+        conn.close()
+        return True
+        
+    except Exception as e:
+        print(f"❌ Erro ao testar conexão: {repr(e)}", file=sys.stderr)
+        return False
+
 def init_db():
     """Inicializa o banco de dados com todas as tabelas"""
     conn = get_connection()
@@ -60,7 +92,7 @@ def init_db():
             for table in tables_to_drop:
                 cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE;")
             
-            # Tabela de usuarios
+            # Tabela de usuarios (removida por enquanto)
             cursor.execute("""
                 CREATE TABLE usuarios (
                     id SERIAL PRIMARY KEY,
@@ -257,27 +289,3 @@ def init_db():
     finally:
         cursor.close()
         conn.close()
-
-def test_connection():
-    """Testa a conexão com o banco de dados"""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        # Teste simples
-        if os.getenv('DATABASE_URL'):
-            cursor.execute("SELECT version();")
-            version = cursor.fetchone()[0]
-            print(f"✅ PostgreSQL conectado: {version}", file=sys.stderr)
-        else:
-            cursor.execute("SELECT sqlite_version();")
-            version = cursor.fetchone()[0]
-            print(f"✅ SQLite conectado: versão {version}", file=sys.stderr)
-        
-        cursor.close()
-        conn.close()
-        return True
-        
-    except Exception as e:
-        print(f"❌ Erro ao testar conexão: {repr(e)}", file=sys.stderr)
-        return False
