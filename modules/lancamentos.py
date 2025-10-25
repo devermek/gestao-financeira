@@ -57,7 +57,7 @@ def _show_novo_lancamento():
     # Mostra informações da obra atual
     st.info(f"📋 **Obra Ativa:** {obra_config['nome']} | **Orçamento:** {format_currency_br(obra_config['orcamento'])}")
     
-    with st.form("novo_lancamento_form"):
+    with st.form("novo_lancamento_form", clear_on_submit=True):
         st.markdown("### 📝 Dados do Lançamento")
         
         col1, col2 = st.columns(2)
@@ -65,14 +65,16 @@ def _show_novo_lancamento():
         with col1:
             descricao = st.text_input(
                 "Descrição *",
-                placeholder="Ex: Compra de cimento para fundação"
+                placeholder="Ex: Compra de cimento para fundação",
+                key="descricao_input"
             )
             
             valor = st.number_input(
                 "Valor (R$) *",
                 min_value=0.01,
                 step=0.01,
-                format="%.2f"
+                format="%.2f",
+                key="valor_input"
             )
         
         with col2:
@@ -81,18 +83,21 @@ def _show_novo_lancamento():
             categoria_selecionada = st.selectbox(
                 "Categoria *",
                 options=list(categoria_options.keys()),
-                index=0
+                index=0,
+                key="categoria_input"
             )
             
             data_lancamento = st.date_input(
                 "Data do Lançamento *",
                 value=date.today(),
-                max_value=date.today()
+                max_value=date.today(),
+                key="data_input"
             )
         
         observacoes = st.text_area(
             "Observações (opcional)",
-            placeholder="Informações adicionais sobre o lançamento..."
+            placeholder="Informações adicionais sobre o lançamento...",
+            key="observacoes_input"
         )
         
         # Upload de arquivos
@@ -101,7 +106,8 @@ def _show_novo_lancamento():
             "Anexar comprovantes",
             accept_multiple_files=True,
             type=['pdf', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'txt', 'doc', 'docx', 'xls', 'xlsx'],
-            help="Tipos permitidos: PDF, imagens, documentos de texto e planilhas. Máximo 30MB por arquivo."
+            help="Tipos permitidos: PDF, imagens, documentos de texto e planilhas. Máximo 30MB por arquivo.",
+            key="arquivos_input"
         )
         
         # Preview dos arquivos selecionados
@@ -118,112 +124,181 @@ def _show_novo_lancamento():
         
         if submitted:
             # Validações
-            if not descricao.strip():
+            if not descricao or not descricao.strip():
                 st.error("⚠️ A descrição é obrigatória!")
+                return
             elif valor <= 0:
                 st.error("⚠️ O valor deve ser maior que zero!")
+                return
             elif not categoria_selecionada:
                 st.error("⚠️ Selecione uma categoria!")
-            else:
-                # Valida arquivos se houver
-                arquivos_validos = True
-                if uploaded_files:
-                    for file in uploaded_files:
-                        valid, message = validate_file_upload(file)
-                        if not valid:
-                            st.error(f"❌ {file.name}: {message}")
-                            arquivos_validos = False
+                return
+            
+            # Valida arquivos se houver
+            arquivos_validos = True
+            if uploaded_files:
+                for file in uploaded_files:
+                    valid, message = validate_file_upload(file)
+                    if not valid:
+                        st.error(f"❌ {file.name}: {message}")
+                        arquivos_validos = False
+            
+            if arquivos_validos:
+                categoria_id = categoria_options[categoria_selecionada]
                 
-                if arquivos_validos:
-                    categoria_id = categoria_options[categoria_selecionada]
+                # Debug: mostra dados que serão salvos
+                if st.checkbox("�� Debug - Mostrar dados do lançamento", value=False, key="debug_dados"):
+                    st.json({
+                        "obra_id": obra_config['id'],
+                        "categoria_id": categoria_id,
+                        "descricao": descricao,
+                        "valor": valor,
+                        "data_lancamento": str(data_lancamento),
+                        "observacoes": observacoes
+                    })
+                
+                with st.spinner("Salvando lançamento..."):
+                    lancamento_id = _save_lancamento(
+                        obra_config['id'],
+                        categoria_id,
+                        descricao,
+                        valor,
+                        data_lancamento,
+                        observacoes
+                    )
+                
+                if lancamento_id:
+                    # Salva arquivos se houver
+                    arquivos_salvos = 0
+                    if uploaded_files:
+                        for file in uploaded_files:
+                            if save_file(lancamento_id, file):
+                                arquivos_salvos += 1
                     
-                    # Debug: mostra dados que serão salvos
-                    if st.checkbox("🔍 Debug - Mostrar dados do lançamento", value=False):
-                        st.json({
-                            "obra_id": obra_config['id'],
-                            "categoria_id": categoria_id,
-                            "descricao": descricao,
-                            "valor": valor,
-                            "data_lancamento": str(data_lancamento),
-                            "observacoes": observacoes
-                        })
+                    st.success(f"✅ Lançamento registrado com sucesso! ID: {lancamento_id}")
+                    if arquivos_salvos > 0:
+                        st.info(f"📎 {arquivos_salvos} arquivo(s) anexado(s) com sucesso!")
                     
-                    with st.spinner("Salvando lançamento..."):
-                        lancamento_id = _save_lancamento(
-                            obra_config['id'],
-                            categoria_id,
-                            descricao,
-                            valor,
-                            data_lancamento,
-                            observacoes
-                        )
+                    st.balloons()
                     
-                    if lancamento_id:
-                        # Salva arquivos se houver
-                        arquivos_salvos = 0
-                        if uploaded_files:
-                            for file in uploaded_files:
-                                if save_file(lancamento_id, file):
-                                    arquivos_salvos += 1
-                        
-                        st.success(f"✅ Lançamento registrado com sucesso! ID: {lancamento_id}")
-                        if arquivos_salvos > 0:
-                            st.info(f"📎 {arquivos_salvos} arquivo(s) anexado(s) com sucesso!")
-                        
-                        st.balloons()
-                        
-                        # Aguarda um pouco antes de recarregar
-                        import time
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("❌ Erro ao registrar lançamento! Verifique os logs para mais detalhes.")
+                    # Força atualização do cache
+                    if 'dashboard_cache' in st.session_state:
+                        del st.session_state['dashboard_cache']
+                    
+                    # Aguarda um pouco antes de recarregar
+                    import time
+                    time.sleep(2)
+                    st.rerun()
+                else:
+                    st.error("❌ Erro ao registrar lançamento! Verifique os logs para mais detalhes.")
 
 def _save_lancamento(obra_id, categoria_id, descricao, valor, data_lancamento, observacoes):
-    """Salva novo lançamento"""
+    """Salva novo lançamento com verificação robusta"""
     try:
+        print(f"Iniciando salvamento do lançamento: obra_id={obra_id}, categoria_id={categoria_id}, valor={valor}", file=sys.stderr)
+        
         conn = get_connection()
         cursor = conn.cursor()
         
         import os
         is_postgres = os.getenv('DATABASE_URL') is not None
         
+        # Verifica se obra existe e está ativa
+        if is_postgres:
+            cursor.execute("SELECT id, nome FROM obras WHERE id = %s AND ativo = TRUE", (obra_id,))
+        else:
+            cursor.execute("SELECT id, nome FROM obras WHERE id = ? AND ativo = 1", (obra_id,))
+        
+        obra = cursor.fetchone()
+        if not obra:
+            print(f"Erro: Obra {obra_id} não encontrada ou inativa", file=sys.stderr)
+            cursor.close()
+            conn.close()
+            return None
+        
+        print(f"Obra encontrada: {obra['nome']}", file=sys.stderr)
+        
+        # Verifica se categoria existe e está ativa
+        if is_postgres:
+            cursor.execute("SELECT id, nome FROM categorias WHERE id = %s AND ativo = TRUE", (categoria_id,))
+        else:
+            cursor.execute("SELECT id, nome FROM categorias WHERE id = ? AND ativo = 1", (categoria_id,))
+        
+        categoria = cursor.fetchone()
+        if not categoria:
+            print(f"Erro: Categoria {categoria_id} não encontrada ou inativa", file=sys.stderr)
+            cursor.close()
+            conn.close()
+            return None
+        
+        print(f"Categoria encontrada: {categoria['nome']}", file=sys.stderr)
+        
+        # Converte data para string se necessário
+        if isinstance(data_lancamento, date):
+            data_str = data_lancamento.strftime('%Y-%m-%d')
+        else:
+            data_str = str(data_lancamento)
+        
+        # Insere o lançamento
         if is_postgres:
             query = """
-                INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id
             """
-            cursor.execute(query, (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes))
+            cursor.execute(query, (obra_id, categoria_id, descricao, valor, data_str, observacoes))
             result = cursor.fetchone()
             lancamento_id = result['id'] if result else None
         else:
             query = """
-                INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
             """
-            cursor.execute(query, (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes))
+            cursor.execute(query, (obra_id, categoria_id, descricao, valor, data_str, observacoes))
             lancamento_id = cursor.lastrowid
         
         if not lancamento_id:
             print("Erro: ID do lançamento não retornado", file=sys.stderr)
             conn.rollback()
+            cursor.close()
+            conn.close()
             return None
         
+        # Confirma a transação
         conn.commit()
         
-        print(f"Lançamento salvo com sucesso: ID {lancamento_id}", file=sys.stderr)
-        return lancamento_id
+        # Verifica se foi realmente inserido
+        if is_postgres:
+            cursor.execute("SELECT COUNT(*) as count FROM lancamentos WHERE id = %s", (lancamento_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM lancamentos WHERE id = ?", (lancamento_id,))
+        
+        count = cursor.fetchone()['count']
+        
+        cursor.close()
+        conn.close()
+        
+        if count > 0:
+            print(f"Lançamento salvo com sucesso: ID {lancamento_id}", file=sys.stderr)
+            return lancamento_id
+        else:
+            print(f"Erro: Lançamento não foi encontrado após inserção", file=sys.stderr)
+            return None
         
     except Exception as e:
         print(f"Erro ao salvar lançamento: {repr(e)}", file=sys.stderr)
         if 'conn' in locals():
-            conn.rollback()
+            try:
+                conn.rollback()
+            except:
+                pass
         return None
     finally:
         try:
-            cursor.close()
-            conn.close()
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
         except:
             pass
 
@@ -231,11 +306,24 @@ def _show_lista_lancamentos():
     """Lista todos os lançamentos"""
     st.subheader("📋 Lista de Lançamentos")
     
+    # Botão para forçar atualização
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        if st.button("🔄 Atualizar", use_container_width=True):
+            if 'lancamentos_cache' in st.session_state:
+                del st.session_state['lancamentos_cache']
+            st.rerun()
+    
     # Busca lançamentos
     lancamentos = _get_lancamentos()
     
     if not lancamentos:
         st.info("📝 Nenhum lançamento registrado ainda.")
+        
+        # Botão para ir direto ao formulário
+        if st.button("➕ Registrar Primeiro Lançamento", use_container_width=True):
+            st.session_state.current_page = "💰 Lançamentos"
+            st.rerun()
         return
     
     # Estatísticas rápidas
@@ -265,7 +353,7 @@ def _show_lista_lancamentos():
             with col1:
                 st.write(f"**📅 Data:** {format_date_br(lancamento['data_lancamento'])}")
                 st.write(f"**🏷️ Categoria:** {lancamento['categoria_nome']}")
-                st.write(f"**💰 Valor:** {format_currency_br(lancamento['valor'])}")
+                st.write(f"**�� Valor:** {format_currency_br(lancamento['valor'])}")
             
             with col2:
                 if lancamento['observacoes']:
@@ -292,6 +380,11 @@ def _show_lista_lancamentos():
                 if st.button(f"🗑️ Excluir", key=f"delete_{lancamento['id']}", use_container_width=True):
                     if _delete_lancamento(lancamento['id']):
                         st.success("✅ Lançamento excluído com sucesso!")
+                        # Limpa cache
+                        if 'lancamentos_cache' in st.session_state:
+                            del st.session_state['lancamentos_cache']
+                        if 'dashboard_cache' in st.session_state:
+                            del st.session_state['dashboard_cache']
                         st.rerun()
                     else:
                         st.error("❌ Erro ao excluir lançamento!")
@@ -300,61 +393,12 @@ def _show_lista_lancamentos():
             if st.session_state.get(f'editing_lancamento_{lancamento["id"]}', False):
                 _show_edit_lancamento_modal(lancamento)
 
-def _show_filtros_lancamentos():
-    """Filtros e busca de lançamentos"""
-    st.subheader("�� Buscar e Filtrar Lançamentos")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Filtro por período
-        st.markdown("### 📅 Filtro por Período")
-        data_inicio = st.date_input("Data Início", value=date.today() - timedelta(days=30))
-        data_fim = st.date_input("Data Fim", value=date.today())
-        
-        # Filtro por categoria
-        st.markdown("### 🏷️ Filtro por Categoria")
-        categorias = get_categorias_ativas()
-        categoria_names = ["Todas"] + [cat['nome'] for cat in categorias]
-        categoria_filtro = st.selectbox("Categoria", categoria_names)
-    
-    with col2:
-        # Filtro por valor
-        st.markdown("### �� Filtro por Valor")
-        valor_min = st.number_input("Valor Mínimo (R$)", min_value=0.0, value=0.0)
-        valor_max = st.number_input("Valor Máximo (R$)", min_value=0.0, value=0.0)
-        
-        # Busca por texto
-        st.markdown("### 🔍 Busca por Texto")
-        texto_busca = st.text_input("Buscar na descrição", placeholder="Digite para buscar...")
-    
-    if st.button("🔍 Aplicar Filtros", use_container_width=True):
-        # Busca com filtros
-        lancamentos_filtrados = _get_lancamentos_filtrados(
-            data_inicio, data_fim, categoria_filtro, valor_min, valor_max, texto_busca
-        )
-        
-        if lancamentos_filtrados:
-            st.success(f"✅ Encontrados {len(lancamentos_filtrados)} lançamento(s)")
-            
-            # Mostra resultados
-            for lancamento in lancamentos_filtrados:
-                with st.expander(f"🧾 {lancamento['descricao']} - {format_currency_br(lancamento['valor'])}"):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.write(f"**�� Data:** {format_date_br(lancamento['data_lancamento'])}")
-                        st.write(f"**🏷️ Categoria:** {lancamento['categoria_nome']}")
-                    
-                    with col2:
-                        st.write(f"**💰 Valor:** {format_currency_br(lancamento['valor'])}")
-                        if lancamento['observacoes']:
-                            st.write(f"**📝 Observações:** {lancamento['observacoes']}")
-        else:
-            st.info("📝 Nenhum lançamento encontrado com os filtros aplicados.")
-
 def _get_lancamentos():
-    """Busca todos os lançamentos"""
+    """Busca todos os lançamentos com cache"""
+    # Verifica cache
+    if 'lancamentos_cache' in st.session_state:
+        return st.session_state['lancamentos_cache']
+    
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -365,8 +409,9 @@ def _get_lancamentos():
         if is_postgres:
             query = """
                 SELECT 
-                    l.id, l.descricao, l.valor, l.data_lancamento, l.observacoes,
-                    c.nome as categoria_nome, c.cor as categoria_cor
+                    l.id, l.descricao, l.valor, l.data_lancamento, l.observacoes, l.created_at,
+                    c.nome as categoria_nome, c.cor as categoria_cor,
+                    o.nome as obra_nome
                 FROM lancamentos l
                 JOIN categorias c ON l.categoria_id = c.id
                 JOIN obras o ON l.obra_id = o.id
@@ -376,8 +421,9 @@ def _get_lancamentos():
         else:
             query = """
                 SELECT 
-                    l.id, l.descricao, l.valor, l.data_lancamento, l.observacoes,
-                    c.nome as categoria_nome, c.cor as categoria_cor
+                    l.id, l.descricao, l.valor, l.data_lancamento, l.observacoes, l.created_at,
+                    c.nome as categoria_nome, c.cor as categoria_cor,
+                    o.nome as obra_nome
                 FROM lancamentos l
                 JOIN categorias c ON l.categoria_id = c.id
                 JOIN obras o ON l.obra_id = o.id
@@ -408,9 +454,15 @@ def _get_lancamentos():
                 'data_lancamento': row['data_lancamento'],
                 'observacoes': row['observacoes'],
                 'categoria_nome': row['categoria_nome'],
-                'categoria_cor': row['categoria_cor']
+                'categoria_cor': row['categoria_cor'],
+                'obra_nome': row['obra_nome'],
+                'created_at': row['created_at']
             })
         
+        # Salva no cache
+        st.session_state['lancamentos_cache'] = lancamentos
+        
+        print(f"Encontrados {len(lancamentos)} lançamentos", file=sys.stderr)
         return lancamentos
         
     except Exception as e:
@@ -422,6 +474,59 @@ def _get_lancamentos():
             conn.close()
         except:
             pass
+
+def _show_filtros_lancamentos():
+    """Filtros e busca de lançamentos"""
+    st.subheader("🔍 Buscar e Filtrar Lançamentos")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Filtro por período
+        st.markdown("### 📅 Filtro por Período")
+        data_inicio = st.date_input("Data Início", value=date.today() - timedelta(days=30))
+        data_fim = st.date_input("Data Fim", value=date.today())
+        
+        # Filtro por categoria
+        st.markdown("### 🏷️ Filtro por Categoria")
+        categorias = get_categorias_ativas()
+        categoria_names = ["Todas"] + [cat['nome'] for cat in categorias]
+        categoria_filtro = st.selectbox("Categoria", categoria_names)
+    
+    with col2:
+        # Filtro por valor
+        st.markdown("### 💰 Filtro por Valor")
+        valor_min = st.number_input("Valor Mínimo (R$)", min_value=0.0, value=0.0)
+        valor_max = st.number_input("Valor Máximo (R$)", min_value=0.0, value=0.0)
+        
+        # Busca por texto
+        st.markdown("### 🔍 Busca por Texto")
+        texto_busca = st.text_input("Buscar na descrição", placeholder="Digite para buscar...")
+    
+    if st.button("🔍 Aplicar Filtros", use_container_width=True):
+        # Busca com filtros
+        lancamentos_filtrados = _get_lancamentos_filtrados(
+            data_inicio, data_fim, categoria_filtro, valor_min, valor_max, texto_busca
+        )
+        
+        if lancamentos_filtrados:
+            st.success(f"✅ Encontrados {len(lancamentos_filtrados)} lançamento(s)")
+            
+            # Mostra resultados
+            for lancamento in lancamentos_filtrados:
+                with st.expander(f"🧾 {lancamento['descricao']} - {format_currency_br(lancamento['valor'])}"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write(f"**�� Data:** {format_date_br(lancamento['data_lancamento'])}")
+                        st.write(f"**🏷️ Categoria:** {lancamento['categoria_nome']}")
+                    
+                    with col2:
+                        st.write(f"**�� Valor:** {format_currency_br(lancamento['valor'])}")
+                        if lancamento['observacoes']:
+                            st.write(f"**📝 Observações:** {lancamento['observacoes']}")
+        else:
+            st.info("📝 Nenhum lançamento encontrado com os filtros aplicados.")
 
 def _get_lancamentos_filtrados(data_inicio, data_fim, categoria, valor_min, valor_max, texto_busca):
     """Busca lançamentos com filtros"""
@@ -546,6 +651,13 @@ def _delete_lancamento(lancamento_id):
         import os
         is_postgres = os.getenv('DATABASE_URL') is not None
         
+        # Primeiro exclui arquivos relacionados
+        if is_postgres:
+            cursor.execute("DELETE FROM arquivos WHERE lancamento_id = %s", (lancamento_id,))
+        else:
+            cursor.execute("DELETE FROM arquivos WHERE lancamento_id = ?", (lancamento_id,))
+        
+        # Depois exclui o lançamento
         if is_postgres:
             query = "DELETE FROM lancamentos WHERE id = %s"
         else:
@@ -554,15 +666,27 @@ def _delete_lancamento(lancamento_id):
         cursor.execute(query, (lancamento_id,))
         conn.commit()
         
-        return cursor.rowcount > 0
+        rows_affected = cursor.rowcount
+        cursor.close()
+        conn.close()
+        
+        print(f"Lançamento {lancamento_id} excluído. Linhas afetadas: {rows_affected}", file=sys.stderr)
+        return rows_affected > 0
         
     except Exception as e:
         print(f"Erro ao excluir lançamento: {repr(e)}", file=sys.stderr)
+        if 'conn' in locals():
+            try:
+                conn.rollback()
+            except:
+                pass
         return False
     finally:
         try:
-            cursor.close()
-            conn.close()
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
         except:
             pass
 
@@ -608,6 +732,11 @@ def _show_edit_lancamento_modal(lancamento):
                 ):
                     st.success("✅ Lançamento atualizado com sucesso!")
                     del st.session_state[f'editing_lancamento_{lancamento["id"]}']
+                    # Limpa cache
+                    if 'lancamentos_cache' in st.session_state:
+                        del st.session_state['lancamentos_cache']
+                    if 'dashboard_cache' in st.session_state:
+                        del st.session_state['dashboard_cache']
                     st.rerun()
                 else:
                     st.error("❌ Erro ao atualizar lançamento!")
@@ -626,6 +755,12 @@ def _update_lancamento(lancamento_id, descricao, valor, categoria_id, data_lanca
         import os
         is_postgres = os.getenv('DATABASE_URL') is not None
         
+        # Converte data para string se necessário
+        if isinstance(data_lancamento, date):
+            data_str = data_lancamento.strftime('%Y-%m-%d')
+        else:
+            data_str = str(data_lancamento)
+        
         if is_postgres:
             query = """
                 UPDATE lancamentos 
@@ -637,22 +772,34 @@ def _update_lancamento(lancamento_id, descricao, valor, categoria_id, data_lanca
             query = """
                 UPDATE lancamentos 
                 SET descricao = ?, valor = ?, categoria_id = ?, 
-                    data_lancamento = ?, observacoes = ?, updated_at = CURRENT_TIMESTAMP
+                    data_lancamento = ?, observacoes = ?, updated_at = datetime('now')
                 WHERE id = ?
             """
         
-        cursor.execute(query, (descricao, valor, categoria_id, data_lancamento, observacoes, lancamento_id))
+        cursor.execute(query, (descricao, valor, categoria_id, data_str, observacoes, lancamento_id))
         conn.commit()
         
-        return cursor.rowcount > 0
+        rows_affected = cursor.rowcount
+        cursor.close()
+        conn.close()
+        
+        print(f"Lançamento {lancamento_id} atualizado. Linhas afetadas: {rows_affected}", file=sys.stderr)
+        return rows_affected > 0
         
     except Exception as e:
         print(f"Erro ao atualizar lançamento: {repr(e)}", file=sys.stderr)
+        if 'conn' in locals():
+            try:
+                conn.rollback()
+            except:
+                pass
         return False
     finally:
         try:
-            cursor.close()
-            conn.close()
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
         except:
             pass
 
@@ -739,27 +886,38 @@ def save_file(lancamento_id, file):
         
         if is_postgres:
             query = """
-                INSERT INTO arquivos (lancamento_id, nome_arquivo, tipo_arquivo, tamanho_arquivo, conteudo_arquivo)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO arquivos (lancamento_id, nome_arquivo, tipo_arquivo, tamanho_arquivo, conteudo_arquivo, created_at)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
         else:
             query = """
-                INSERT INTO arquivos (lancamento_id, nome_arquivo, tipo_arquivo, tamanho_arquivo, conteudo_arquivo)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO arquivos (lancamento_id, nome_arquivo, tipo_arquivo, tamanho_arquivo, conteudo_arquivo, created_at)
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
             """
         
         cursor.execute(query, (lancamento_id, file.name, file.type, file.size, file_content))
         conn.commit()
         
+        cursor.close()
+        conn.close()
+        
+        print(f"Arquivo {file.name} salvo para lançamento {lancamento_id}", file=sys.stderr)
         return True
         
     except Exception as e:
         print(f"Erro ao salvar arquivo: {repr(e)}", file=sys.stderr)
+        if 'conn' in locals():
+            try:
+                conn.rollback()
+            except:
+                pass
         return False
     finally:
         try:
-            cursor.close()
-            conn.close()
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
         except:
             pass
 
@@ -796,12 +954,17 @@ def download_file(arquivo_id):
                 mime=result['tipo_arquivo']
             )
         
+        cursor.close()
+        conn.close()
+        
     except Exception as e:
         print(f"Erro ao fazer download: {repr(e)}", file=sys.stderr)
         st.error("❌ Erro ao baixar arquivo!")
     finally:
         try:
-            cursor.close()
-            conn.close()
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
         except:
             pass
