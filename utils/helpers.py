@@ -6,15 +6,15 @@ def format_currency_br(valor):
     """Formata valor para moeda brasileira"""
     try:
         if valor is None or valor == 0:
-            return "R\$ 0,00"
+            return "R$ 0,00"
         
         # Converte para float se necessário
         if isinstance(valor, str):
             valor = float(valor.replace(',', '.'))
         
-        return f"R\$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except:
-        return "R\$ 0,00"
+        return "R$ 0,00"
 
 def format_date_br(data):
     """Formata data para padrão brasileiro"""

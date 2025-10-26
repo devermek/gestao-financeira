@@ -223,7 +223,7 @@ def show_grafico_distribuicao_completo(dados):
         values=valores,
         marker=dict(colors=cores),
         hovertemplate='<b>%{label}</b><br>' +
-                     'Valor: R\$ %{value:,.2f}<br>' +
+                     'Valor: R$ %{value:,.2f}<br>' +
                      'Do Total Gasto: %{percent}<br>' +
                      'Do Orçamento Total: %{customdata:.1f}%<extra></extra>',
         customdata=percentuais_orcamento,
@@ -326,7 +326,7 @@ def show_grafico_categorias(dados):
         labels=nomes,
         values=valores,
         marker=dict(colors=cores),
-        hovertemplate='<b>%{label}</b><br>Valor: R\$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
+        hovertemplate='<b>%{label}</b><br>Valor: R$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
         textinfo='label+percent',
         textposition='auto'
     )])
@@ -369,7 +369,7 @@ def show_progresso_orcamento(dados):
         labels=labels,
         values=values,
         marker=dict(colors=colors),
-        hovertemplate='<b>%{label}</b><br>Valor: R\$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
+        hovertemplate='<b>%{label}</b><br>Valor: R$ %{value:,.2f}<br>Percentual: %{percent}<extra></extra>',
         textinfo='label+percent',
         textposition='auto'
     )])
@@ -423,7 +423,7 @@ def show_evolucao_gastos():
             name='Gastos Acumulados',
             line=dict(color='#007bff', width=3),
             marker=dict(size=6),
-            hovertemplate='Data: %{x}<br>Valor Acumulado: R\$ %{y:,.2f}<extra></extra>'
+            hovertemplate='Data: %{x}<br>Valor Acumulado: R$ %{y:,.2f}<extra></extra>'
         ))
         
         # Barras de gastos diários
@@ -432,13 +432,13 @@ def show_evolucao_gastos():
             y=df['valor'],
             name='Gastos Diários',
             marker_color='rgba(0, 123, 255, 0.3)',
-            hovertemplate='Data: %{x}<br>Valor: R\$ %{y:,.2f}<extra></extra>'
+            hovertemplate='Data: %{x}<br>Valor: R$ %{y:,.2f}<extra></extra>'
         ))
         
         fig.update_layout(
             title="Evolução dos Gastos ao Longo do Tempo",
             xaxis_title="Data",
-            yaxis_title="Valor (R\$)",
+            yaxis_title="Valor (R$)",
             hovermode='x unified',
             height=400,
             margin=dict(t=50, b=50, l=50, r=50),
