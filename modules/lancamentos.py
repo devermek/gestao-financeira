@@ -123,39 +123,54 @@ def _show_novo_lancamento():
         submitted = st.form_submit_button("💾 Registrar Lançamento", use_container_width=True)
         
         if submitted:
+            print(f"=== FORMULÁRIO SUBMETIDO ===", file=sys.stderr)
+            print(f"Descrição: '{descricao}'", file=sys.stderr)
+            print(f"Valor: {valor}", file=sys.stderr)
+            print(f"Categoria selecionada: '{categoria_selecionada}'", file=sys.stderr)
+            print(f"Data: {data_lancamento}", file=sys.stderr)
+            
             # Validações
             if not descricao or not descricao.strip():
                 st.error("⚠️ A descrição é obrigatória!")
+                print("ERRO: Descrição vazia", file=sys.stderr)
                 return
             elif valor <= 0:
                 st.error("⚠️ O valor deve ser maior que zero!")
+                print(f"ERRO: Valor inválido: {valor}", file=sys.stderr)
                 return
             elif not categoria_selecionada:
                 st.error("⚠️ Selecione uma categoria!")
+                print("ERRO: Categoria não selecionada", file=sys.stderr)
                 return
+            
+            print("✅ Validações básicas passaram", file=sys.stderr)
             
             # Valida arquivos se houver
             arquivos_validos = True
             if uploaded_files:
+                print(f"Validando {len(uploaded_files)} arquivo(s)", file=sys.stderr)
                 for file in uploaded_files:
                     valid, message = validate_file_upload(file)
                     if not valid:
                         st.error(f"❌ {file.name}: {message}")
                         arquivos_validos = False
+                        print(f"ERRO no arquivo {file.name}: {message}", file=sys.stderr)
             
             if arquivos_validos:
                 categoria_id = categoria_options[categoria_selecionada]
+                print(f"ID da categoria: {categoria_id}", file=sys.stderr)
                 
-                # Debug: mostra dados que serão salvos
-                if st.checkbox("�� Debug - Mostrar dados do lançamento", value=False, key="debug_dados"):
-                    st.json({
-                        "obra_id": obra_config['id'],
-                        "categoria_id": categoria_id,
-                        "descricao": descricao,
-                        "valor": valor,
-                        "data_lancamento": str(data_lancamento),
-                        "observacoes": observacoes
-                    })
+                # Mostra dados que serão salvos
+                st.info("📝 Salvando lançamento...")
+                dados_debug = {
+                    "obra_id": obra_config['id'],
+                    "categoria_id": categoria_id,
+                    "descricao": descricao,
+                    "valor": valor,
+                    "data_lancamento": str(data_lancamento),
+                    "observacoes": observacoes
+                }
+                print(f"Dados para salvar: {dados_debug}", file=sys.stderr)
                 
                 with st.spinner("Salvando lançamento..."):
                     lancamento_id = _save_lancamento(
@@ -167,10 +182,13 @@ def _show_novo_lancamento():
                         observacoes
                     )
                 
+                print(f"Resultado do salvamento: {lancamento_id}", file=sys.stderr)
+                
                 if lancamento_id:
                     # Salva arquivos se houver
                     arquivos_salvos = 0
                     if uploaded_files:
+                        print(f"Salvando {len(uploaded_files)} arquivo(s)", file=sys.stderr)
                         for file in uploaded_files:
                             if save_file(lancamento_id, file):
                                 arquivos_salvos += 1
@@ -182,116 +200,214 @@ def _show_novo_lancamento():
                     st.balloons()
                     
                     # Força atualização do cache
-                    if 'dashboard_cache' in st.session_state:
-                        del st.session_state['dashboard_cache']
+                    cache_keys = ['dashboard_cache', 'lancamentos_cache', 'obra_cache']
+                    for key in cache_keys:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    
+                    print("Cache limpo, aguardando antes de recarregar...", file=sys.stderr)
                     
                     # Aguarda um pouco antes de recarregar
                     import time
-                    time.sleep(2)
+                    time.sleep(3)
                     st.rerun()
                 else:
                     st.error("❌ Erro ao registrar lançamento! Verifique os logs para mais detalhes.")
+                    print("ERRO: Lançamento não foi salvo", file=sys.stderr)
+            else:
+                print("ERRO: Arquivos inválidos", file=sys.stderr)
 
 def _save_lancamento(obra_id, categoria_id, descricao, valor, data_lancamento, observacoes):
     """Salva novo lançamento com verificação robusta"""
     try:
-        print(f"Iniciando salvamento do lançamento: obra_id={obra_id}, categoria_id={categoria_id}, valor={valor}", file=sys.stderr)
+        print(f"=== INICIANDO SALVAMENTO DO LANÇAMENTO ===", file=sys.stderr)
+        print(f"Obra ID: {obra_id}", file=sys.stderr)
+        print(f"Categoria ID: {categoria_id}", file=sys.stderr)
+        print(f"Descrição: {descricao}", file=sys.stderr)
+        print(f"Valor: {valor} (tipo: {type(valor)})", file=sys.stderr)
+        print(f"Data: {data_lancamento} (tipo: {type(data_lancamento)})", file=sys.stderr)
+        print(f"Observações: {observacoes}", file=sys.stderr)
         
         conn = get_connection()
         cursor = conn.cursor()
         
         import os
         is_postgres = os.getenv('DATABASE_URL') is not None
+        print(f"Usando PostgreSQL: {is_postgres}", file=sys.stderr)
         
-        # Verifica se obra existe e está ativa
+        # VERIFICAÇÃO 1: Obra existe e está ativa
         if is_postgres:
-            cursor.execute("SELECT id, nome FROM obras WHERE id = %s AND ativo = TRUE", (obra_id,))
+            cursor.execute("SELECT id, nome, ativo FROM obras WHERE id = %s", (obra_id,))
         else:
-            cursor.execute("SELECT id, nome FROM obras WHERE id = ? AND ativo = 1", (obra_id,))
+            cursor.execute("SELECT id, nome, ativo FROM obras WHERE id = ?", (obra_id,))
         
         obra = cursor.fetchone()
+        print(f"Obra encontrada: {obra}", file=sys.stderr)
+        
         if not obra:
-            print(f"Erro: Obra {obra_id} não encontrada ou inativa", file=sys.stderr)
+            print(f"ERRO: Obra {obra_id} não encontrada", file=sys.stderr)
             cursor.close()
             conn.close()
             return None
         
-        print(f"Obra encontrada: {obra['nome']}", file=sys.stderr)
-        
-        # Verifica se categoria existe e está ativa
+        # Verifica se obra está ativa
+        obra_ativa = obra['ativo']
         if is_postgres:
-            cursor.execute("SELECT id, nome FROM categorias WHERE id = %s AND ativo = TRUE", (categoria_id,))
+            obra_ativa = obra_ativa is True
         else:
-            cursor.execute("SELECT id, nome FROM categorias WHERE id = ? AND ativo = 1", (categoria_id,))
+            obra_ativa = obra_ativa == 1
+        
+        if not obra_ativa:
+            print(f"ERRO: Obra {obra_id} não está ativa", file=sys.stderr)
+            cursor.close()
+            conn.close()
+            return None
+        
+        print(f"✅ Obra validada: {obra['nome']}", file=sys.stderr)
+        
+        # VERIFICAÇÃO 2: Categoria existe e está ativa
+        if is_postgres:
+            cursor.execute("SELECT id, nome, ativo FROM categorias WHERE id = %s", (categoria_id,))
+        else:
+            cursor.execute("SELECT id, nome, ativo FROM categorias WHERE id = ?", (categoria_id,))
         
         categoria = cursor.fetchone()
+        print(f"Categoria encontrada: {categoria}", file=sys.stderr)
+        
         if not categoria:
-            print(f"Erro: Categoria {categoria_id} não encontrada ou inativa", file=sys.stderr)
+            print(f"ERRO: Categoria {categoria_id} não encontrada", file=sys.stderr)
             cursor.close()
             conn.close()
             return None
         
-        print(f"Categoria encontrada: {categoria['nome']}", file=sys.stderr)
+        # Verifica se categoria está ativa
+        categoria_ativa = categoria['ativo']
+        if is_postgres:
+            categoria_ativa = categoria_ativa is True
+        else:
+            categoria_ativa = categoria_ativa == 1
         
-        # Converte data para string se necessário
+        if not categoria_ativa:
+            print(f"ERRO: Categoria {categoria_id} não está ativa", file=sys.stderr)
+            cursor.close()
+            conn.close()
+            return None
+        
+        print(f"✅ Categoria validada: {categoria['nome']}", file=sys.stderr)
+        
+        # PREPARAÇÃO DOS DADOS
+        # Converte valor para decimal/float
+        try:
+            valor_decimal = float(valor)
+            print(f"Valor convertido: {valor_decimal}", file=sys.stderr)
+        except (TypeError, ValueError) as e:
+            print(f"ERRO: Não foi possível converter valor {valor}: {e}", file=sys.stderr)
+            cursor.close()
+            conn.close()
+            return None
+        
+        # Converte data para string
         if isinstance(data_lancamento, date):
             data_str = data_lancamento.strftime('%Y-%m-%d')
+        elif isinstance(data_lancamento, str):
+            data_str = data_lancamento
         else:
             data_str = str(data_lancamento)
         
-        # Insere o lançamento
+        print(f"Data formatada: {data_str}", file=sys.stderr)
+        
+        # Prepara observações
+        obs_final = observacoes if observacoes else None
+        
+        # INSERÇÃO DO LANÇAMENTO
+        print("=== EXECUTANDO INSERÇÃO ===", file=sys.stderr)
+        
         if is_postgres:
             query = """
                 INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id
             """
-            cursor.execute(query, (obra_id, categoria_id, descricao, valor, data_str, observacoes))
-            result = cursor.fetchone()
-            lancamento_id = result['id'] if result else None
+            params = (obra_id, categoria_id, descricao, valor_decimal, data_str, obs_final)
         else:
             query = """
                 INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
             """
-            cursor.execute(query, (obra_id, categoria_id, descricao, valor, data_str, observacoes))
+            params = (obra_id, categoria_id, descricao, valor_decimal, data_str, obs_final)
+        
+        print(f"Query: {query}", file=sys.stderr)
+        print(f"Params: {params}", file=sys.stderr)
+        
+        cursor.execute(query, params)
+        
+        # Obtém ID do lançamento inserido
+        if is_postgres:
+            result = cursor.fetchone()
+            lancamento_id = result['id'] if result else None
+        else:
             lancamento_id = cursor.lastrowid
         
+        print(f"ID retornado: {lancamento_id}", file=sys.stderr)
+        
         if not lancamento_id:
-            print("Erro: ID do lançamento não retornado", file=sys.stderr)
+            print("ERRO: ID do lançamento não retornado", file=sys.stderr)
             conn.rollback()
             cursor.close()
             conn.close()
             return None
         
-        # Confirma a transação
+        # COMMIT DA TRANSAÇÃO
+        print("=== FAZENDO COMMIT ===", file=sys.stderr)
         conn.commit()
+        print("✅ Commit realizado", file=sys.stderr)
         
-        # Verifica se foi realmente inserido
+        # VERIFICAÇÃO FINAL: Confirma se foi inserido
+        print("=== VERIFICAÇÃO FINAL ===", file=sys.stderr)
+        
         if is_postgres:
-            cursor.execute("SELECT COUNT(*) as count FROM lancamentos WHERE id = %s", (lancamento_id,))
+            cursor.execute("SELECT id, descricao, valor FROM lancamentos WHERE id = %s", (lancamento_id,))
         else:
-            cursor.execute("SELECT COUNT(*) as count FROM lancamentos WHERE id = ?", (lancamento_id,))
+            cursor.execute("SELECT id, descricao, valor FROM lancamentos WHERE id = ?", (lancamento_id,))
         
-        count = cursor.fetchone()['count']
+        verificacao = cursor.fetchone()
+        print(f"Verificação: {verificacao}", file=sys.stderr)
         
-        cursor.close()
-        conn.close()
-        
-        if count > 0:
-            print(f"Lançamento salvo com sucesso: ID {lancamento_id}", file=sys.stderr)
+        if verificacao:
+            print(f"✅ LANÇAMENTO SALVO COM SUCESSO: ID {lancamento_id}", file=sys.stderr)
+            print(f"   Descrição: {verificacao['descricao']}", file=sys.stderr)
+            print(f"   Valor: {verificacao['valor']}", file=sys.stderr)
+            
+            # Conta total de lançamentos na obra
+            if is_postgres:
+                cursor.execute("SELECT COUNT(*) as total FROM lancamentos WHERE obra_id = %s", (obra_id,))
+            else:
+                cursor.execute("SELECT COUNT(*) as total FROM lancamentos WHERE obra_id = ?", (obra_id,))
+            
+            total = cursor.fetchone()['total']
+            print(f"   Total de lançamentos na obra agora: {total}", file=sys.stderr)
+            
+            cursor.close()
+            conn.close()
             return lancamento_id
         else:
-            print(f"Erro: Lançamento não foi encontrado após inserção", file=sys.stderr)
+            print("ERRO: Lançamento não encontrado após inserção", file=sys.stderr)
+            cursor.close()
+            conn.close()
             return None
         
     except Exception as e:
-        print(f"Erro ao salvar lançamento: {repr(e)}", file=sys.stderr)
+        print(f"ERRO CRÍTICO ao salvar lançamento: {repr(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        
         if 'conn' in locals():
             try:
+                print("Fazendo rollback...", file=sys.stderr)
                 conn.rollback()
-            except:
-                pass
+            except Exception as rollback_error:
+                print(f"Erro no rollback: {rollback_error}", file=sys.stderr)
+        
         return None
     finally:
         try:
@@ -299,8 +415,9 @@ def _save_lancamento(obra_id, categoria_id, descricao, valor, data_lancamento, o
                 cursor.close()
             if 'conn' in locals():
                 conn.close()
-        except:
-            pass
+            print("Conexões fechadas", file=sys.stderr)
+        except Exception as close_error:
+            print(f"Erro ao fechar conexões: {close_error}", file=sys.stderr)
 
 def _show_lista_lancamentos():
     """Lista todos os lançamentos"""
@@ -353,7 +470,7 @@ def _show_lista_lancamentos():
             with col1:
                 st.write(f"**📅 Data:** {format_date_br(lancamento['data_lancamento'])}")
                 st.write(f"**🏷️ Categoria:** {lancamento['categoria_nome']}")
-                st.write(f"**�� Valor:** {format_currency_br(lancamento['valor'])}")
+                st.write(f"**💰 Valor:** {format_currency_br(lancamento['valor'])}")
             
             with col2:
                 if lancamento['observacoes']:
@@ -518,11 +635,11 @@ def _show_filtros_lancamentos():
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.write(f"**�� Data:** {format_date_br(lancamento['data_lancamento'])}")
+                        st.write(f"**📅 Data:** {format_date_br(lancamento['data_lancamento'])}")
                         st.write(f"**🏷️ Categoria:** {lancamento['categoria_nome']}")
                     
                     with col2:
-                        st.write(f"**�� Valor:** {format_currency_br(lancamento['valor'])}")
+                        st.write(f"**💰 Valor:** {format_currency_br(lancamento['valor'])}")
                         if lancamento['observacoes']:
                             st.write(f"**📝 Observações:** {lancamento['observacoes']}")
         else:
