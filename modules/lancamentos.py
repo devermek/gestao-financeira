@@ -22,7 +22,7 @@ def show_lancamentos():
         show_filtros_lancamentos()
 
 def show_novo_lancamento():
-    """Formulário para novo lançamento - VERSÃO SIMPLIFICADA"""
+    """Formulário para novo lançamento - SEM RECARREGAR"""
     st.subheader("➕ Registrar Novo Lançamento")
     
     # Verifica se há obra configurada
@@ -47,127 +47,198 @@ def show_novo_lancamento():
     # Mostra informações da obra atual
     st.info(f"📋 **Obra Ativa:** {obra_config['nome']} | **Orçamento:** {format_currency_br(obra_config['orcamento'])}")
     
-    # FORMULÁRIO DIRETO SEM FORM WRAPPER
+    # INICIALIZA DADOS NO SESSION STATE
+    if 'form_descricao' not in st.session_state:
+        st.session_state.form_descricao = ""
+    if 'form_valor' not in st.session_state:
+        st.session_state.form_valor = 0.01
+    if 'form_categoria' not in st.session_state:
+        st.session_state.form_categoria = 0
+    if 'form_data' not in st.session_state:
+        st.session_state.form_data = date.today()
+    if 'form_observacoes' not in st.session_state:
+        st.session_state.form_observacoes = ""
+    
     st.markdown("### 📝 Dados do Lançamento")
     
     col1, col2 = st.columns(2)
     
     with col1:
+        # Campo descrição com callback
         descricao = st.text_input(
             "Descrição *",
+            value=st.session_state.form_descricao,
             placeholder="Ex: Compra de cimento para fundação",
-            key="desc_novo"
+            key="input_descricao",
+            on_change=update_form_descricao
         )
         
+        # Campo valor com callback
         valor = st.number_input(
             "Valor (R$) *",
             min_value=0.01,
             step=0.01,
             format="%.2f",
-            key="valor_novo"
+            value=st.session_state.form_valor,
+            key="input_valor",
+            on_change=update_form_valor
         )
     
     with col2:
         # Selectbox para categorias
-        categoria_options = {f"{cat['nome']}": cat['id'] for cat in categorias}
-        categoria_selecionada = st.selectbox(
+        categoria_options = [f"{cat['nome']}" for cat in categorias]
+        categoria_ids = [cat['id'] for cat in categorias]
+        
+        categoria_index = st.selectbox(
             "Categoria *",
-            options=list(categoria_options.keys()),
-            index=0,
-            key="cat_nova"
+            options=range(len(categoria_options)),
+            format_func=lambda x: categoria_options[x],
+            index=st.session_state.form_categoria,
+            key="input_categoria",
+            on_change=update_form_categoria
         )
         
+        # Campo data com callback
         data_lancamento = st.date_input(
             "Data do Lançamento *",
-            value=date.today(),
+            value=st.session_state.form_data,
             max_value=date.today(),
-            key="data_nova"
+            key="input_data",
+            on_change=update_form_data
         )
     
+    # Campo observações com callback
     observacoes = st.text_area(
         "Observações (opcional)",
+        value=st.session_state.form_observacoes,
         placeholder="Informações adicionais sobre o lançamento...",
-        key="obs_nova"
+        key="input_observacoes",
+        on_change=update_form_observacoes
     )
     
-    # Botão de salvar FORA do form
-    if st.button("💾 REGISTRAR LANÇAMENTO", use_container_width=True, type="primary"):
-        print(f"=== BOTÃO CLICADO - FORMULÁRIO SUBMETIDO ===", file=sys.stderr)
-        print(f"Descrição: '{descricao}'", file=sys.stderr)
-        print(f"Valor: {valor}", file=sys.stderr)
-        print(f"Categoria: '{categoria_selecionada}'", file=sys.stderr)
-        print(f"Data: {data_lancamento}", file=sys.stderr)
-        
-        # Validações básicas
-        erro = False
-        
-        if not descricao or not descricao.strip():
-            st.error("⚠️ A descrição é obrigatória!")
-            print("ERRO: Descrição vazia", file=sys.stderr)
-            erro = True
-        
-        if valor <= 0:
-            st.error("⚠️ O valor deve ser maior que zero!")
-            print(f"ERRO: Valor inválido: {valor}", file=sys.stderr)
-            erro = True
-        
-        if not categoria_selecionada:
-            st.error("⚠️ Selecione uma categoria!")
-            print("ERRO: Categoria não selecionada", file=sys.stderr)
-            erro = True
-        
-        if erro:
-            print("ERRO: Validação falhou", file=sys.stderr)
-            return
-        
-        print("✅ Validações passaram", file=sys.stderr)
-        
-        # Pega ID da categoria
-        categoria_id = categoria_options[categoria_selecionada]
-        print(f"ID da categoria: {categoria_id}", file=sys.stderr)
-        
-        # Tenta salvar
-        with st.spinner("Salvando lançamento..."):
-            lancamento_id = save_lancamento_direto(
-                obra_config['id'],
-                categoria_id,
-                descricao,
-                valor,
-                data_lancamento,
-                observacoes
-            )
-        
-        print(f"Resultado do salvamento: {lancamento_id}", file=sys.stderr)
-        
-        if lancamento_id:
-            st.success(f"✅ Lançamento registrado com sucesso! ID: {lancamento_id}")
-            st.balloons()
+    # Mostra preview dos dados
+    with st.expander("👁️ Preview dos Dados", expanded=False):
+        st.write(f"**Descrição:** {st.session_state.form_descricao}")
+        st.write(f"**Valor:** R$ {st.session_state.form_valor:.2f}")
+        if categoria_index < len(categoria_options):
+            st.write(f"**Categoria:** {categoria_options[categoria_index]}")
+        st.write(f"**Data:** {st.session_state.form_data}")
+        st.write(f"**Observações:** {st.session_state.form_observacoes}")
+    
+    # Botões de ação
+    col_save, col_clear = st.columns(2)
+    
+    with col_save:
+        if st.button("💾 REGISTRAR LANÇAMENTO", use_container_width=True, type="primary"):
+            print(f"=== BOTÃO REGISTRAR CLICADO ===", file=sys.stderr)
             
-            # Limpa campos
-            for key in ['desc_novo', 'valor_novo', 'cat_nova', 'data_nova', 'obs_nova']:
-                if key in st.session_state:
-                    del st.session_state[key]
+            # Pega dados do session state
+            desc = st.session_state.form_descricao
+            val = st.session_state.form_valor
+            cat_idx = st.session_state.form_categoria
+            data = st.session_state.form_data
+            obs = st.session_state.form_observacoes
             
-            # Limpa cache
-            cache_keys = ['dashboard_cache', 'lancamentos_cache']
-            for key in cache_keys:
-                if key in st.session_state:
-                    del st.session_state[key]
+            print(f"Dados do form: desc='{desc}', valor={val}, categoria_idx={cat_idx}", file=sys.stderr)
             
-            print("✅ Cache limpo, recarregando em 2 segundos...", file=sys.stderr)
-            import time
-            time.sleep(2)
+            # Validações
+            erro = False
+            
+            if not desc or not desc.strip():
+                st.error("⚠️ A descrição é obrigatória!")
+                erro = True
+            
+            if val <= 0:
+                st.error("⚠️ O valor deve ser maior que zero!")
+                erro = True
+            
+            if cat_idx >= len(categoria_ids):
+                st.error("⚠️ Categoria inválida!")
+                erro = True
+            
+            if erro:
+                return
+            
+            # Pega ID da categoria
+            categoria_id = categoria_ids[cat_idx]
+            categoria_nome = categoria_options[cat_idx]
+            
+            print(f"Salvando: categoria_id={categoria_id}, categoria_nome='{categoria_nome}'", file=sys.stderr)
+            
+            # Tenta salvar
+            with st.spinner("Salvando lançamento..."):
+                lancamento_id = save_lancamento_direto(
+                    obra_config['id'],
+                    categoria_id,
+                    desc,
+                    val,
+                    data,
+                    obs
+                )
+            
+            if lancamento_id:
+                st.success(f"✅ Lançamento registrado com sucesso! ID: {lancamento_id}")
+                st.balloons()
+                
+                # Limpa formulário
+                clear_form()
+                
+                # Limpa cache
+                cache_keys = ['dashboard_cache', 'lancamentos_cache']
+                for key in cache_keys:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                
+                print("✅ Lançamento salvo, cache limpo", file=sys.stderr)
+                
+                # Aguarda e recarrega
+                import time
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.error("❌ Erro ao registrar lançamento!")
+    
+    with col_clear:
+        if st.button("🗑️ LIMPAR FORMULÁRIO", use_container_width=True):
+            clear_form()
             st.rerun()
-        else:
-            st.error("❌ Erro ao registrar lançamento! Verifique os logs.")
-            print("ERRO: Lançamento não foi salvo", file=sys.stderr)
+
+# Funções de callback para atualizar session state
+def update_form_descricao():
+    st.session_state.form_descricao = st.session_state.input_descricao
+
+def update_form_valor():
+    st.session_state.form_valor = st.session_state.input_valor
+
+def update_form_categoria():
+    st.session_state.form_categoria = st.session_state.input_categoria
+
+def update_form_data():
+    st.session_state.form_data = st.session_state.input_data
+
+def update_form_observacoes():
+    st.session_state.form_observacoes = st.session_state.input_observacoes
+
+def clear_form():
+    """Limpa todos os campos do formulário"""
+    st.session_state.form_descricao = ""
+    st.session_state.form_valor = 0.01
+    st.session_state.form_categoria = 0
+    st.session_state.form_data = date.today()
+    st.session_state.form_observacoes = ""
+    
+    # Limpa também os inputs
+    form_keys = ['input_descricao', 'input_valor', 'input_categoria', 'input_data', 'input_observacoes']
+    for key in form_keys:
+        if key in st.session_state:
+            del st.session_state[key]
 
 def save_lancamento_direto(obra_id, categoria_id, descricao, valor, data_lancamento, observacoes):
     """Salva lançamento de forma mais direta"""
     try:
         print(f"=== SALVAMENTO DIRETO INICIADO ===", file=sys.stderr)
         print(f"Obra: {obra_id}, Categoria: {categoria_id}", file=sys.stderr)
-        print(f"Descrição: {descricao}", file=sys.stderr)
+        print(f"Descrição: '{descricao}'", file=sys.stderr)
         print(f"Valor: {valor} (tipo: {type(valor)})", file=sys.stderr)
         print(f"Data: {data_lancamento}", file=sys.stderr)
         
@@ -186,22 +257,25 @@ def save_lancamento_direto(obra_id, categoria_id, descricao, valor, data_lancame
         # Converte valor
         valor_float = float(valor)
         
-        print(f"Dados convertidos - Data: {data_str}, Valor: {valor_float}", file=sys.stderr)
+        # Prepara observações
+        obs_final = observacoes if observacoes and observacoes.strip() else None
+        
+        print(f"Dados convertidos - Data: {data_str}, Valor: {valor_float}, Obs: {obs_final}", file=sys.stderr)
         
         # Query mais simples
         if is_postgres:
             query = """
-                INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id
             """
-            params = (obra_id, categoria_id, descricao, valor_float, data_str, observacoes)
+            params = (obra_id, categoria_id, descricao, valor_float, data_str, obs_final)
         else:
             query = """
-                INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO lancamentos (obra_id, categoria_id, descricao, valor, data_lancamento, observacoes, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
             """
-            params = (obra_id, categoria_id, descricao, valor_float, data_str, observacoes)
+            params = (obra_id, categoria_id, descricao, valor_float, data_str, obs_final)
         
         print(f"Executando query: {query}", file=sys.stderr)
         print(f"Parâmetros: {params}", file=sys.stderr)
@@ -290,7 +364,7 @@ def show_lista_lancamentos():
         st.metric("📊 Total de Lançamentos", total_lancamentos)
     
     with col2:
-        st.metric("💰 Valor Total", format_currency_br(total_valor))
+        st.metric("�� Valor Total", format_currency_br(total_valor))
     
     with col3:
         if total_lancamentos > 0:
@@ -306,7 +380,7 @@ def show_lista_lancamentos():
             
             with col1:
                 st.write(f"**📅 Data:** {format_date_br(lancamento['data_lancamento'])}")
-                st.write(f"**��️ Categoria:** {lancamento['categoria_nome']}")
+                st.write(f"**🏷️ Categoria:** {lancamento['categoria_nome']}")
                 st.write(f"**💰 Valor:** {format_currency_br(lancamento['valor'])}")
             
             with col2:
